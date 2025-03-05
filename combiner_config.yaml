@@ -1,0 +1,15 @@
+supported_extensions:
+  - .css
+  - .js
+remove_whitespace: true
+remove_empty_lines: true
+ignore_paths:
+  - "public"
+  - "build"
+  - "node_modules"
+  - "__pycache__"
+  - "*.svg"
+  - ".gitignore"
+  - "package-lock.json"
+  - "package.json"
+  - "README.md"

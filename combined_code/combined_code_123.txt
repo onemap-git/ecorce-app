@@ -1,0 +1,1959 @@
+# Combined source code for commit: 123
+# Generated on: 2025-03-05 04:12:21
+
+
+
+# ** File: src/reportWebVitals.js **
+const reportWebVitals = onPerfEntry => {
+if (onPerfEntry && onPerfEntry instanceof Function) {
+import('web-vitals').then(({ getCLS, getFID, getFCP, getLCP, getTTFB }) => {
+getCLS(onPerfEntry);
+getFID(onPerfEntry);
+getFCP(onPerfEntry);
+getLCP(onPerfEntry);
+getTTFB(onPerfEntry);
+});
+}
+};
+export default reportWebVitals;
+
+
+
+# ** File: src/App.css **
+.App {
+text-align: center;
+}
+.App-logo {
+height: 40vmin;
+pointer-events: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+.App-logo {
+animation: App-logo-spin infinite 20s linear;
+}
+}
+.App-header {
+background-color: #282c34;
+min-height: 100vh;
+display: flex;
+flex-direction: column;
+align-items: center;
+justify-content: center;
+font-size: calc(10px + 2vmin);
+color: white;
+}
+.App-link {
+color: #61dafb;
+}
+@keyframes App-logo-spin {
+from {
+transform: rotate(0deg);
+}
+to {
+transform: rotate(360deg);
+}
+}
+
+
+
+# ** File: src/index.js **
+// src/index.js (example)
+import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+import './index.css';
+// 1. Import MUI theme utilities
+import { createTheme, ThemeProvider } from '@mui/material/styles';
+// 2. Create a custom theme specifying the font
+const theme = createTheme({
+typography: {
+fontFamily: 'Space Grotesk, sans-serif',
+},
+});
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+<React.StrictMode>
+{/* 3. Wrap your entire app in ThemeProvider */}
+<ThemeProvider theme={theme}>
+<App />
+</ThemeProvider>
+</React.StrictMode>
+);
+
+
+
+# ** File: src/index.css **
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap');
+html, body {
+height: 100%;
+background-color: #F5F3EB; /* Adjust to match the site */
+font-family: 'Space Grotesk', sans-serif !important; /* <— updated font */
+color: #2D2A26;
+}
+.container {
+max-width: 1200px;
+margin: auto;
+padding: 2rem;
+}
+.table-container {
+height: calc(100vh - 150px); /* Adjust based on header height */
+overflow-y: auto;
+border-radius: 10px;
+background: white;
+}
+
+
+
+# ** File: src/App.test.js **
+import { render, screen } from '@testing-library/react';
+import App from './App';
+test('renders learn react link', () => {
+render(<App />);
+const linkElement = screen.getByText(/learn react/i);
+expect(linkElement).toBeInTheDocument();
+});
+
+
+
+# ** File: src/setupTests.js **
+// jest-dom adds custom jest matchers for asserting on DOM nodes.
+// allows you to do things like:
+// expect(element).toHaveTextContent(/react/i)
+// learn more: https://github.com/testing-library/jest-dom
+import '@testing-library/jest-dom';
+
+
+
+# ** File: src/firebase.js **
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { getFirestore, serverTimestamp } from 'firebase/firestore';
+// ADD this import for Storage:
+import { getStorage } from 'firebase/storage';
+const firebaseConfig = {
+apiKey: "AIzaSyAuaXIWX2K08mapzxi0OT7H4pkfnb1WpW4",
+authDomain: "ecorce-dev.firebaseapp.com",
+projectId: "ecorce-dev",
+storageBucket: "ecorce-dev.firebasestorage.app",
+messagingSenderId: "1096630557135",
+appId: "1:1096630557135:web:94434d5275a2a64e08daba",
+measurementId: "G-6K6XZHY6VZ"
+};
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const firestore = getFirestore(app);
+// Export storage:
+const storage = getStorage(app);
+export { app, auth, firestore, storage, serverTimestamp };
+
+
+
+# ** File: src/App.js **
+// src/App.js
+import React, { useEffect, useState } from 'react';
+import { auth, firestore } from './firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import Login from './components/Login';
+import ProductsPage from './components/ProductsPage';
+import OrderHistory from './components/OrderHistory';
+import DeliveryDashboard from './components/DeliveryDashboard';
+function App() {
+const [user, setUser] = useState(null);
+const [isDelivery, setIsDelivery] = useState(false);
+const [loading, setLoading] = useState(true); // New loading state
+useEffect(() => {
+const unsub = auth.onAuthStateChanged(async (u) => {
+setUser(u);
+if (u) {
+// Check if user is a delivery person
+const userDocRef = doc(firestore, 'users', u.uid);
+const snap = await getDoc(userDocRef);
+if (snap.exists()) {
+const data = snap.data();
+if (data.delivery === true) {
+console.log('Is delivery');
+setIsDelivery(true);
+} else {
+setIsDelivery(false);
+}
+} else {
+setIsDelivery(false);
+}
+} else {
+setIsDelivery(false);
+}
+setLoading(false); // Loading complete after auth & fetch check
+});
+return () => unsub();
+}, []);
+if (loading) {
+// Render a loading indicator or nothing until the state is determined
+return <div>Loading...</div>;
+}
+return (
+<Router>
+<Routes>
+{/* Public or login */}
+<Route
+path="/login"
+element={user ? <Navigate to="/" /> : <Login />}
+/>
+{/* Normal user path */}
+<Route
+path="/"
+element={user ? <ProductsPage user={user} /> : <Navigate to="/login" />}
+/>
+<Route
+path="/orders"
+element={user ? <OrderHistory user={user} /> : <Navigate to="/login" />}
+/>
+{/* Delivery path (only accessible if user isDelivery) */}
+<Route
+path="/delivery"
+element={
+user && isDelivery
+? <DeliveryDashboard user={user} />
+: <Navigate to="/" />
+}
+/>
+{/* Fallback */}
+<Route path="*" element={<Navigate to="/" />} />
+</Routes>
+</Router>
+);
+}
+export default App;
+
+
+
+# ** File: src/utils/formatPrice.js **
+export function formatPrice(value) {
+return parseFloat(value).toFixed(2);
+}
+
+
+
+# ** File: src/components/OrderHistory.js **
+// src/components/OrderHistory.js
+import React, { useState, useEffect } from 'react';
+import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { firestore } from '../firebase';
+import { Link as RouterLink } from 'react-router-dom';
+import {
+Container,
+Typography,
+Link,
+Paper,
+Box,
+Chip
+} from '@mui/material';
+function OrderHistory({ user }) {
+const [orders, setOrders] = useState([]);
+useEffect(() => {
+const ordersRef = collection(firestore, 'orders');
+const q = query(
+ordersRef,
+where('userId', '==', user.uid),
+orderBy('createdAt', 'desc')
+);
+const unsubscribe = onSnapshot(q, snapshot => {
+const ordersData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+setOrders(ordersData);
+});
+return () => unsubscribe();
+}, [user.uid]);
+// Helper: Choose chip color based on order status
+const getStatusColor = (status) => {
+if (status === 'delivered') return 'success';
+if (status === 'being delivered') return 'warning';
+return 'default';
+};
+return (
+<Container sx={{ py: 4 }}>
+<Typography variant="h4" gutterBottom>
+Order History
+</Typography>
+<Link component={RouterLink} to="/">
+Back to Products
+</Link>
+{orders.length === 0 ? (
+<Typography sx={{ mt: 2 }}>No orders found.</Typography>
+) : (
+orders.map(order => (
+<Paper key={order.id} sx={{ mb: 2, p: 2 }}>
+<Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+Order ID: {order.id}
+</Typography>
+<Typography variant="body2">
+<strong>Date:</strong> {order.createdAt ? order.createdAt.toDate().toLocaleString() : 'N/A'}
+</Typography>
+{/* Status Chip */}
+{order.deliveryStatus && (
+<Box sx={{ my: 1 }}>
+<Chip
+label={order.deliveryStatus}
+color={getStatusColor(order.deliveryStatus)}
+/>
+</Box>
+)}
+{/* If delivered, show delivery date */}
+{order.deliveryStatus === 'delivered' && (
+<Typography variant="body2">
+<strong>Delivery Date:</strong> {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
+</Typography>
+)}
+{/* Items table */}
+<Box sx={{ mt: 1 }}>
+<Typography variant="subtitle2" sx={{ mb: 1 }}>
+Items:
+</Typography>
+{/* Table header */}
+<Box sx={{
+display: 'flex',
+borderBottom: '1px solid #ccc',
+fontWeight: 'bold',
+pb: 1,
+mb: 1
+}}>
+<Box sx={{ flex: 1 }}>ID</Box>
+<Box sx={{ flex: 2 }}>Name</Box>
+<Box sx={{ width: 80, textAlign: 'right' }}>Quantity</Box>
+<Box sx={{ width: 80, textAlign: 'right' }}>Price</Box>
+</Box>
+{/* Render each item */}
+{order.items.map(item => (
+<Box key={item.id} sx={{ mb: 1 }}>
+<Box sx={{
+display: 'flex',
+alignItems: 'center',
+py: 0.5,
+borderBottom: '1px dashed #eee'
+}}>
+<Box sx={{ flex: 1 }}>{item.id}</Box>
+<Box sx={{ flex: 2 }}>{item.name}</Box>
+<Box sx={{ width: 80, textAlign: 'right' }}>{item.quantity}</Box>
+<Box sx={{ width: 80, textAlign: 'right' }}>
+${parseFloat(item.price).toFixed(2)}
+</Box>
+</Box>
+{item.comment && (
+<Typography
+variant="body2"
+sx={{ ml: 2, color: 'grey.600', pt: 0.5 }}
+>
+Comment: {item.comment}
+</Typography>
+)}
+</Box>
+))}
+</Box>
+{/* Optionally, show signature if available */}
+{order.signature && (
+<Box sx={{ mt: 1 }}>
+<Typography variant="body2"><strong>Signature:</strong></Typography>
+<Box
+component="img"
+src={order.signature}
+alt="Signature"
+sx={{ maxWidth: 200, border: '1px solid #ccc', p: 0.5, borderRadius: 1 }}
+/>
+</Box>
+)}
+</Paper>
+))
+)}
+</Container>
+);
+}
+export default OrderHistory;
+
+
+
+# ** File: src/components/ProductRow.js **
+// ProductRow.js
+import React, { useState } from 'react';
+import { TableRow, TableCell, TextField, Button } from '@mui/material';
+import { formatPrice } from '../utils/formatPrice';
+function ProductRow({ product, addToBasket, style, columnWidths }) {
+const [quantity, setQuantity] = useState(1);
+if (!product) {
+console.log('[ProductRow] No product found for this row. Possibly out of range?');
+return null;
+}
+const handleAdd = () => {
+console.log(`[ProductRow] handleAdd: productId=${product.id}, quantity=${quantity}`);
+addToBasket(product, parseInt(quantity, 10));
+setQuantity(1);
+};
+return (
+<TableRow style={style}>
+<TableCell sx={{ width: columnWidths.name }}>{product.name}</TableCell>
+<TableCell sx={{ width: columnWidths.category }}>{product.category}</TableCell>
+<TableCell sx={{ width: columnWidths.bio }}>{product.bio ? "Yes" : "No"}</TableCell>
+<TableCell sx={{ width: columnWidths.price }}>${formatPrice(product.price)}</TableCell>
+<TableCell sx={{ width: columnWidths.quantity }}>
+<TextField
+type="number"
+value={quantity}
+onChange={e => setQuantity(e.target.value)}
+inputProps={{ min: 1 }}
+size="small"
+sx={{ width: '60px' }}
+/>
+</TableCell>
+<TableCell sx={{ width: columnWidths.add }}>
+<Button variant="contained" onClick={handleAdd}>
+Add
+</Button>
+</TableCell>
+</TableRow>
+);
+}
+export default ProductRow;
+
+
+
+# ** File: src/components/Login.js **
+import React, { useState, useEffect } from 'react';
+import { isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from 'firebase/auth';
+import { auth } from '../firebase';
+import { useLocation } from 'react-router-dom';
+import { Container, Typography, TextField, Button, Box, Alert } from '@mui/material';
+function Login() {
+const [email, setEmail] = useState('');
+const [message, setMessage] = useState('');
+const location = useLocation();
+useEffect(() => {
+if (isSignInWithEmailLink(auth, window.location.href)) {
+let storedEmail = window.localStorage.getItem('emailForSignIn');
+if (!storedEmail) {
+storedEmail = window.prompt('Please provide your email for confirmation');
+}
+signInWithEmailLink(auth, storedEmail, window.location.href)
+.then(() => {
+window.localStorage.removeItem('emailForSignIn');
+})
+.catch(error => {
+console.error(error);
+});
+}
+}, [location]);
+const handleSubmit = async (e) => {
+e.preventDefault();
+const actionCodeSettings = {
+url: window.location.href,
+handleCodeInApp: true,
+};
+try {
+await sendSignInLinkToEmail(auth, email, actionCodeSettings);
+window.localStorage.setItem('emailForSignIn', email);
+setMessage('Login link sent to your email!');
+} catch (error) {
+console.error(error);
+setMessage('Error sending email link');
+}
+};
+return (
+<Container maxWidth="sm">
+<Box sx={{ mt: 8, p: 4, boxShadow: 3, borderRadius: 2 }}>
+<Typography variant="h4" component="h1" gutterBottom>
+Login
+</Typography>
+<form onSubmit={handleSubmit}>
+<TextField
+fullWidth
+label="Email"
+variant="outlined"
+margin="normal"
+type="email"
+value={email}
+onChange={e => setEmail(e.target.value)}
+required
+/>
+<Button variant="contained" color="primary" type="submit" fullWidth>
+Send Login Link
+</Button>
+</form>
+{message && <Alert severity="info" sx={{ mt: 2 }}>{message}</Alert>}
+</Box>
+</Container>
+);
+}
+export default Login;
+
+
+
+# ** File: src/components/NoTag.js **
+// NoTag.js
+import React from 'react';
+const NoTag = React.forwardRef(({ children }, ref) => <>{children}</>);
+export default NoTag;
+
+
+
+# ** File: src/components/DeliveryOrderCard.js **
+// src/components/DeliveredOrderCard.js
+import React, { useState, useEffect } from 'react';
+import { Paper, Typography, Box, Button } from '@mui/material';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { firestore } from '../firebase';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+const DeliveredOrderCard = ({ order }) => {
+// Additional state for company info:
+const [address, setAddress] = useState(null);
+const [companyName, setCompanyName] = useState('');
+const [partnerEmail, setPartnerEmail] = useState('');
+useEffect(() => {
+const fetchPartnerInfo = async () => {
+try {
+const partnersRef = collection(firestore, 'res_partner');
+const qPartners = query(partnersRef, where('email', '==', order.email));
+const querySnapshot = await getDocs(qPartners);
+if (!querySnapshot.empty) {
+const partnerData = querySnapshot.docs[0].data();
+setAddress(partnerData.contact_address_complete || '');
+setCompanyName(partnerData.company_name || '');
+setPartnerEmail(partnerData.email || '');
+}
+} catch (error) {
+console.error('Error fetching address/company info', error);
+}
+};
+fetchPartnerInfo();
+}, [order.email]);
+const printBill = () => {
+const doc = new jsPDF();
+doc.setFontSize(16);
+doc.text('Delivery Bill', 14, 20);
+doc.setFontSize(12);
+doc.text(`Order ID: ${order.id}`, 14, 30);
+const deliveredOn = order.deliveredAt
+? order.deliveredAt.toDate().toLocaleString()
+: 'N/A';
+doc.text(`Delivered on: ${deliveredOn}`, 14, 40);
+let startY = 50;
+// Company info
+if (companyName) {
+doc.text(`Company: ${companyName}`, 14, startY);
+startY += 8;
+}
+if (partnerEmail) {
+doc.text(`Email: ${partnerEmail}`, 14, startY);
+startY += 8;
+}
+if (address) {
+doc.text(`Address: ${address}`, 14, startY);
+startY += 10;
+}
+// PDF table with four columns: ID, Name, Quantity, and Price.
+const tableColumns = ['ID', 'Name', 'Quantity', 'Price'];
+const tableRows = order.items.map(item => [
+item.id,
+item.name,
+item.quantity.toString(),
+`$${parseFloat(item.price).toFixed(2)}`
+]);
+autoTable(doc, {
+startY,
+head: [tableColumns],
+body: tableRows,
+styles: { fontSize: 10 },
+headStyles: { fillColor: [41, 128, 185] },
+columnStyles: {
+2: { halign: 'right' }, // Right-align Quantity
+3: { halign: 'right' }  // Right-align Price
+}
+});
+// Add signature if available.
+if (order.signature) {
+const finalY = doc.lastAutoTable.finalY || startY;
+doc.text('Signature:', 14, finalY + 15);
+doc.addImage(order.signature, 'PNG', 14, finalY + 20, 60, 30);
+}
+doc.save(`delivery_bill_order_${order.id}.pdf`);
+};
+return (
+<Paper sx={{ mb: 2, p: 2, backgroundColor: '#f7f7f7' }}>
+<Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+Order ID: {order.id}
+</Typography>
+{/* Display company info */}
+{companyName && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Company: {companyName}
+</Typography>
+)}
+{partnerEmail && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Email: {partnerEmail}
+</Typography>
+)}
+{address && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Address: {address}
+</Typography>
+)}
+<Typography variant="body2">
+Delivered on:{' '}
+{order.deliveredAt
+? order.deliveredAt.toDate().toLocaleString()
+: 'N/A'}
+</Typography>
+{/* Web Interface: Items in columns */}
+{order.items && order.items.length > 0 && (
+<Box sx={{ mt: 2 }}>
+{/* Header Row */}
+<Box
+sx={{
+display: 'flex',
+borderBottom: '1px solid #ccc',
+pb: 1,
+mb: 1
+}}
+>
+<Box sx={{ flex: 1, fontWeight: 'bold' }}>ID</Box>
+<Box sx={{ flex: 3, fontWeight: 'bold' }}>Name</Box>
+<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>
+Quantity
+</Box>
+<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>
+Price
+</Box>
+</Box>
+{/* Data Rows */}
+{order.items.map(item => (
+<Box
+key={item.id}
+sx={{ display: 'flex', borderBottom: '1px dashed #ccc', pb: 1, mb: 1 }}
+>
+<Box sx={{ flex: 1 }}>{item.id}</Box>
+<Box sx={{ flex: 3 }}>{item.name}</Box>
+<Box sx={{ flex: 1, textAlign: 'right' }}>{item.quantity}</Box>
+<Box sx={{ flex: 1, textAlign: 'right' }}>
+${parseFloat(item.price).toFixed(2)}
+</Box>
+</Box>
+))}
+</Box>
+)}
+{order.signature && (
+<Box sx={{ mt: 2 }}>
+<Typography variant="body2">
+<strong>Signature:</strong>
+</Typography>
+<Box
+component="img"
+src={order.signature}
+alt="Signature"
+sx={{ maxWidth: 200, border: '1px solid #ccc', p: 0.5, borderRadius: 1 }}
+/>
+</Box>
+)}
+<Button variant="contained" onClick={printBill} sx={{ mt: 2 }}>
+Print Delivery Bill
+</Button>
+</Paper>
+);
+};
+export default DeliveredOrderCard;
+
+
+
+# ** File: src/components/DeliveryDashboard.js **
+// src/components/DeliveryDashboard.js
+import React, { useState, useEffect, useRef } from 'react';
+import {
+collection,
+query,
+where,
+onSnapshot,
+updateDoc,
+setDoc,
+doc,
+getDoc,
+getDocs,
+serverTimestamp
+} from 'firebase/firestore';
+import { firestore, storage } from '../firebase';
+import SignatureCanvas from 'react-signature-canvas';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import {
+Box,
+Typography,
+Paper,
+Button,
+TextField,
+FormControlLabel,
+Checkbox
+} from '@mui/material';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import Logo from '../logo.png';
+import DeliveredOrderCard from './DeliveryOrderCard';
+// Helper to compute week code (e.g., "07-2025")
+function getWeekCode(date) {
+const target = new Date(date);
+const dayNr = (target.getDay() + 6) % 7; // Monday=0
+target.setDate(target.getDate() - dayNr + 3);
+const firstThursday = new Date(target.getFullYear(), 0, 4);
+const diff = target - firstThursday;
+const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
+return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
+}
+// Generate multi-page PDF of aggregated items
+function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierLabel) {
+const doc = new jsPDF();
+doc.setFontSize(16);
+doc.text(`Aggregated Products - Week ${currentWeek}`, 14, 20);
+doc.setFontSize(12);
+if (supplierLabel) {
+doc.text(`Supplier: ${supplierLabel}`, 14, 30);
+}
+const columns = [
+{ header: 'ID - Name', dataKey: 'name' },
+{ header: 'Qty', dataKey: 'quantity' },
+{ header: 'Price', dataKey: 'price' },
+{ header: 'Line Total', dataKey: 'total' }
+];
+const rows = aggregatedItemsArray.map(item => ({
+name: `ID: ${item.id} - ${item.name}`,
+quantity: item.quantity,
+price: `$${parseFloat(item.price).toFixed(2)}`,
+total: `$${(item.price * item.quantity).toFixed(2)}`
+}));
+autoTable(doc, {
+startY: 40,
+head: [columns.map(col => col.header)],
+body: rows.map(row => columns.map(col => row[col.dataKey])),
+styles: { fontSize: 10 },
+headStyles: { fillColor: [41, 128, 185] },
+margin: { horizontal: 14 }
+});
+doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierLabel}` : ''}.pdf`);
+}
+/**
+* Component for an active order (not delivered yet).
+* Displays items, plus company info from `res_partner`.
+*/
+const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChange }) => {
+const [address, setAddress] = useState(null);
+const [companyName, setCompanyName] = useState('');
+const [partnerEmail, setPartnerEmail] = useState('');
+useEffect(() => {
+const fetchPartnerInfo = async () => {
+try {
+const partnersRef = collection(firestore, 'res_partner');
+const qPartners = query(partnersRef, where('email', '==', order.email));
+const querySnapshot = await getDocs(qPartners);
+if (!querySnapshot.empty) {
+const partnerData = querySnapshot.docs[0].data();
+setAddress(partnerData.contact_address_complete || '');
+setCompanyName(partnerData.company_name || '');
+setPartnerEmail(partnerData.email || '');
+}
+} catch (error) {
+console.error('Error fetching partner info', error);
+}
+};
+fetchPartnerInfo();
+}, [order.email]);
+return (
+<Paper sx={{ mb: 2, p: 2 }}>
+<Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+Order ID: {order.id}
+</Typography>
+{/* Display partner info (company, email, address) */}
+{companyName && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Company: {companyName}
+</Typography>
+)}
+{partnerEmail && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Email: {partnerEmail}
+</Typography>
+)}
+{address && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Address: {address}
+</Typography>
+)}
+<Typography variant="body2">
+Delivery Status: {order.deliveryStatus || 'N/A'}
+</Typography>
+<Box sx={{ mt: 2 }}>
+{order.items?.map((item) => (
+<Box key={item.id} sx={{ mb: 1 }}>
+<Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+<Typography sx={{ flex: 1 }}>{item.name}</Typography>
+<Typography sx={{ width: '80px', textAlign: 'right' }}>
+${parseFloat(item.price).toFixed(2)}
+</Typography>
+<TextField
+type="number"
+size="small"
+value={item.quantity}
+onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
+sx={{ width: '60px', textAlign: 'right' }}
+inputProps={{ style: { textAlign: 'right' }, min: 0 }}
+/>
+</Box>
+{item.comment && (
+<Typography variant="body2" sx={{ ml: 2, color: 'grey.600' }}>
+Comment: {item.comment}
+</Typography>
+)}
+</Box>
+))}
+</Box>
+<Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+<Button
+variant="contained"
+onClick={() => onMarkDelivered(order.id)}
+disabled={!order.signature}
+>
+Mark Delivered
+</Button>
+{order.signature ? (
+<Box
+sx={{
+border: '1px solid #ccc',
+p: 1,
+maxWidth: 200,
+maxHeight: 100,
+overflow: 'hidden'
+}}
+>
+<img
+src={order.signature}
+alt="Signature"
+style={{ width: '100%', height: 'auto' }}
+/>
+</Box>
+) : (
+<Button variant="outlined" onClick={() => onOpenSignaturePad(order.id)}>
+Capture Signature
+</Button>
+)}
+</Box>
+</Paper>
+);
+};
+function DeliveryDashboard({ user }) {
+const [orders, setOrders] = useState([]);
+const [sigPadOpen, setSigPadOpen] = useState(null); // ID of order being signed
+const sigPadRef = useRef(null);
+const printRef = useRef(null);
+const currentWeek = getWeekCode(new Date());
+// For supplier invoices
+const [supplierInvoiceUrl, setSupplierInvoiceUrl] = useState({});
+// 1) Fetch orders for current week
+useEffect(() => {
+const wc = getWeekCode(new Date());
+const ordersRef = collection(firestore, 'orders');
+const qOrders = query(ordersRef, where('weekCode', '==', wc));
+const unsub = onSnapshot(qOrders, (snapshot) => {
+const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+setOrders(data);
+});
+return () => unsub();
+}, []);
+// 2) Aggregate items by supplier
+const aggregatedBySupplier = {};
+orders.forEach(order => {
+if (order.items) {
+order.items.forEach(item => {
+const supplier = item.supplier || 'Unknown';
+if (!aggregatedBySupplier[supplier]) {
+aggregatedBySupplier[supplier] = {};
+}
+if (!aggregatedBySupplier[supplier][item.id]) {
+aggregatedBySupplier[supplier][item.id] = { ...item };
+} else {
+aggregatedBySupplier[supplier][item.id].quantity += item.quantity;
+}
+});
+}
+});
+// 3) Check if there's an uploaded invoice in Firestore for each supplier
+useEffect(() => {
+const loadAllSupplierInvoices = async () => {
+for (const supplier of Object.keys(aggregatedBySupplier)) {
+const docId = `${currentWeek}_${supplier}`;
+const invoiceDocRef = doc(firestore, 'delivery_invoices', docId);
+const snapshot = await getDoc(invoiceDocRef);
+if (snapshot.exists()) {
+const data = snapshot.data();
+if (data.invoiceUrl) {
+setSupplierInvoiceUrl((prev) => ({
+...prev,
+[supplier]: data.invoiceUrl
+}));
+}
+}
+}
+};
+loadAllSupplierInvoices();
+}, [currentWeek, aggregatedBySupplier]);
+// 4) Checklist logic
+const [checklist, setChecklist] = useState({});
+useEffect(() => {
+const wc = getWeekCode(new Date());
+const checklistRef = collection(firestore, 'delivery_checklist');
+const qC = query(checklistRef, where('weekCode', '==', wc));
+const unsub = onSnapshot(qC, (snapshot) => {
+const data = {};
+snapshot.docs.forEach(docSnap => {
+const d = docSnap.data();
+data[d.productId] = { id: docSnap.id, ...d };
+});
+setChecklist(data);
+});
+return () => unsub();
+}, []);
+const toggleCollected = async (productId) => {
+const wc = getWeekCode(new Date());
+if (checklist[productId]) {
+const newStatus = !checklist[productId].collected;
+try {
+await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
+collected: newStatus,
+updatedAt: serverTimestamp()
+});
+} catch (error) {
+console.error('Error updating checklist', error);
+}
+} else {
+try {
+const newDocRef = doc(collection(firestore, 'delivery_checklist'));
+await setDoc(newDocRef, {
+weekCode: wc,
+productId,
+collected: true,
+collectedQuantity: 0,
+newPrice: 0,
+createdAt: serverTimestamp(),
+updatedAt: serverTimestamp()
+});
+} catch (error) {
+console.error('Error creating checklist document', error);
+}
+}
+};
+const updateChecklistField = async (productId, field, value) => {
+const wc = getWeekCode(new Date());
+const numericValue = parseFloat(value) || 0;
+if (checklist[productId]) {
+try {
+await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
+[field]: numericValue,
+updatedAt: serverTimestamp()
+});
+} catch (error) {
+console.error('Error updating checklist field', error);
+}
+} else {
+try {
+const newDocRef = doc(collection(firestore, 'delivery_checklist'));
+await setDoc(newDocRef, {
+weekCode: wc,
+productId,
+collected: false,
+collectedQuantity: field === 'collectedQuantity' ? numericValue : 0,
+newPrice: field === 'newPrice' ? numericValue : 0,
+createdAt: serverTimestamp(),
+updatedAt: serverTimestamp()
+});
+} catch (error) {
+console.error('Error creating checklist document', error);
+}
+}
+};
+// 5) Active vs. delivered orders
+const handleQuantityChange = async (orderId, itemId, newQty) => {
+const order = orders.find(o => o.id === orderId);
+if (!order) return;
+const updatedItems = order.items.map(item => {
+if (item.id === itemId) {
+return { ...item, quantity: parseInt(newQty, 10) || 1 };
+}
+return item;
+});
+try {
+await updateDoc(doc(firestore, 'orders', orderId), {
+items: updatedItems,
+updatedAt: serverTimestamp()
+});
+} catch (err) {
+console.error('Error updating quantity', err);
+}
+};
+const markAsDelivered = async (orderId) => {
+try {
+await updateDoc(doc(firestore, 'orders', orderId), {
+deliveryStatus: 'delivered',
+deliveredAt: serverTimestamp()
+});
+} catch (err) {
+console.error('Error marking as delivered', err);
+}
+};
+// 6) Signature pad
+const openSignaturePad = (orderId) => {
+setSigPadOpen(orderId);
+};
+const clearSignature = () => {
+sigPadRef.current?.clear();
+};
+const saveSignature = async () => {
+if (!sigPadRef.current) return;
+const orderId = sigPadOpen;
+const signatureDataUrl = sigPadRef.current.toDataURL('image/png');
+try {
+await updateDoc(doc(firestore, 'orders', orderId), {
+signature: signatureDataUrl,
+updatedAt: serverTimestamp()
+});
+setSigPadOpen(null);
+} catch (err) {
+console.error('Error saving signature', err);
+}
+};
+// 7) Separate orders
+const activeOrders = orders.filter(order => order.deliveryStatus !== 'delivered');
+const deliveredOrders = orders.filter(order => order.deliveryStatus === 'delivered');
+// 8) PDF Export per supplier
+const handleExportPDF = (supplier) => {
+const itemsObj = aggregatedBySupplier[supplier] || {};
+const itemsArray = Object.values(itemsObj);
+exportAggregatedPDF(itemsArray, currentWeek, supplier);
+};
+// 9) Auto-upload invoices
+const handleInvoiceFileChangeAndUpload = async (supplier, file) => {
+try {
+const invoiceRef = ref(storage, `invoices/${currentWeek}/${supplier}/${file.name}`);
+const uploadTask = uploadBytesResumable(invoiceRef, file);
+uploadTask.on(
+'state_changed',
+() => {},
+(error) => {
+console.error('Upload error:', error);
+alert('Error uploading invoice');
+},
+async () => {
+const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+const docId = `${currentWeek}_${supplier}`;
+await setDoc(
+doc(firestore, 'delivery_invoices', docId),
+{
+weekCode: currentWeek,
+invoiceUrl: downloadURL,
+updatedAt: serverTimestamp()
+},
+{ merge: true }
+);
+setSupplierInvoiceUrl((prev) => ({
+...prev,
+[supplier]: downloadURL
+}));
+}
+);
+} catch (err) {
+console.error('Error uploading invoice', err);
+}
+};
+return (
+<Box sx={{ p: 2 }}>
+<Typography variant="h4" gutterBottom>
+Delivery Dashboard
+</Typography>
+<Typography variant="body1" gutterBottom>
+Orders for week: {currentWeek}
+</Typography>
+{/* Aggregated Items, grouped by supplier */}
+<Box
+ref={printRef}
+sx={{ mt: 4, border: '1px solid #ccc', p: 2, borderRadius: 1 }}
+>
+<Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+<Typography variant="h5" sx={{ ml: 2 }}>
+Aggregated Lists - Week {currentWeek}
+</Typography>
+</Box>
+{Object.keys(aggregatedBySupplier).length === 0 ? (
+<Typography>No aggregated products.</Typography>
+) : (
+Object.keys(aggregatedBySupplier).map((supplier) => {
+const itemsObj = aggregatedBySupplier[supplier];
+const itemsArray = Object.values(itemsObj);
+return (
+<Paper key={supplier} sx={{ mb: 2, p: 2 }}>
+<Typography variant="h6" gutterBottom>
+Supplier: {supplier}
+</Typography>
+<Button
+variant="contained"
+onClick={() => handleExportPDF(supplier)}
+sx={{ mb: 2 }}
+>
+Export PDF
+</Button>
+{/* Image upload area - auto-upload, small preview */}
+<Box sx={{ mb: 2 }}>
+{supplierInvoiceUrl[supplier] ? (
+// If there's already an uploaded invoice, show a small preview
+<Box
+onClick={() => {
+document
+.getElementById(`invoice-input-${supplier}`)
+.click();
+}}
+sx={{ cursor: 'pointer', display: 'inline-block' }}
+>
+<img
+src={supplierInvoiceUrl[supplier]}
+alt={`Invoice for ${supplier}`}
+style={{ maxHeight: 80, width: 'auto' }}
+/>
+<Typography variant="body2" color="primary">
+Click to replace invoice
+</Typography>
+</Box>
+) : (
+// Otherwise, prompt to upload
+<Typography
+variant="body2"
+color="primary"
+sx={{ textDecoration: 'underline', cursor: 'pointer' }}
+onClick={() => {
+document
+.getElementById(`invoice-input-${supplier}`)
+.click();
+}}
+>
+Click to upload invoice
+</Typography>
+)}
+{/* Hidden file input triggers immediate upload */}
+<input
+id={`invoice-input-${supplier}`}
+type="file"
+style={{ display: 'none' }}
+accept="image/*"
+onChange={(e) => {
+if (e.target.files?.[0]) {
+handleInvoiceFileChangeAndUpload(
+supplier,
+e.target.files[0]
+);
+// Reset file input so user can re-select the same file if needed
+e.target.value = null;
+}
+}}
+/>
+</Box>
+{/* Aggregated table for items */}
+<Box
+sx={{
+display: 'flex',
+alignItems: 'center',
+gap: 2,
+mb: 1,
+fontWeight: 'bold',
+borderBottom: '1px solid #ccc',
+pb: 1
+}}
+>
+<Typography sx={{ flex: 1 }}>ID - Name</Typography>
+<Typography sx={{ width: '60px', textAlign: 'right' }}>
+Qty
+</Typography>
+<Typography>Coll.</Typography>
+<Typography sx={{ width: '80px', textAlign: 'center' }}>
+Collected
+</Typography>
+<Typography sx={{ width: '80px', textAlign: 'center' }}>
+New Price
+</Typography>
+<Typography sx={{ width: '80px', textAlign: 'right' }}>
+Orig
+</Typography>
+</Box>
+{itemsArray.map(item => (
+<Box
+key={item.id}
+sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}
+>
+<Typography sx={{ flex: 1 }}>
+{`ID: ${item.id} - ${item.name}`}
+</Typography>
+<Typography sx={{ width: '60px', textAlign: 'right' }}>
+{item.quantity}
+</Typography>
+<FormControlLabel
+control={
+<Checkbox
+checked={checklist[item.id]?.collected || false}
+onChange={() => toggleCollected(item.id)}
+/>
+}
+label=""
+sx={{ mr: 0 }}
+/>
+<TextField
+label="Collected"
+type="number"
+size="small"
+value={
+checklist[item.id]?.collectedQuantity !== undefined
+? checklist[item.id].collectedQuantity
+: ''
+}
+onChange={(e) =>
+updateChecklistField(item.id, 'collectedQuantity', e.target.value)
+}
+sx={{ width: '80px', textAlign: 'right' }}
+inputProps={{ min: 0, style: { textAlign: 'right' } }}
+/>
+<TextField
+label="New Price"
+type="number"
+size="small"
+value={
+checklist[item.id]?.newPrice !== undefined
+? checklist[item.id].newPrice
+: ''
+}
+onChange={(e) =>
+updateChecklistField(item.id, 'newPrice', e.target.value)
+}
+sx={{ width: '100px', textAlign: 'right' }}
+inputProps={{ min: 0, style: { textAlign: 'right' } }}
+/>
+<Typography sx={{ width: '80px', textAlign: 'right' }}>
+${parseFloat(item.price).toFixed(2)}
+</Typography>
+</Box>
+))}
+</Paper>
+);
+})
+)}
+</Box>
+<Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
+Deliveries
+</Typography>
+{/* ACTIVE ORDERS */}
+{activeOrders.length === 0 ? (
+<Typography>No active orders for this week.</Typography>
+) : (
+activeOrders.map(order => (
+<OrderCard
+key={order.id}
+order={order}
+onMarkDelivered={markAsDelivered}
+onOpenSignaturePad={openSignaturePad}
+onQuantityChange={handleQuantityChange}
+/>
+))
+)}
+{/* DELIVERED ORDERS */}
+{deliveredOrders.length > 0 && (
+<>
+<Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
+Delivered Orders
+</Typography>
+{deliveredOrders.map(order => (
+<DeliveredOrderCard key={order.id} order={order} />
+))}
+</>
+)}
+{/* Signature Pad Overlay */}
+{sigPadOpen && (
+<Box
+sx={{
+position: 'fixed',
+top: 0,
+left: 0,
+right: 0,
+bottom: 0,
+backgroundColor: 'rgba(0,0,0,0.5)',
+display: 'flex',
+justifyContent: 'center',
+alignItems: 'center'
+}}
+>
+<Box sx={{ backgroundColor: '#fff', p: 2, borderRadius: 2 }}>
+<Typography variant="h6" gutterBottom>
+Signature
+</Typography>
+<SignatureCanvas
+ref={sigPadRef}
+penColor="black"
+canvasProps={{ width: 400, height: 200, className: 'sigCanvas' }}
+backgroundColor="#eee"
+/>
+<Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+<Button variant="outlined" onClick={clearSignature}>
+Clear
+</Button>
+<Button variant="contained" onClick={saveSignature}>
+Save Signature
+</Button>
+<Button variant="text" onClick={() => setSigPadOpen(null)}>
+Cancel
+</Button>
+</Box>
+</Box>
+</Box>
+)}
+</Box>
+);
+}
+export default DeliveryDashboard;
+
+
+
+# ** File: src/components/CustomTbody.js **
+// CustomTbody.js
+import React from 'react';
+const CustomTbody = React.forwardRef((props, ref) => (
+<tbody ref={ref} {...props} />
+));
+export default CustomTbody;
+
+
+
+# ** File: src/components/VirtualizedProductsTable.js **
+// src/components/VirtualizedProductsTable.js
+import React from 'react';
+import { FixedSizeList as List } from 'react-window';
+import AutoSizer from 'react-virtualized-auto-sizer';
+// Définitions de colonnes de base
+// Ajout d'une nouvelle colonne pour "Fournisseur" avec une largeur de base de 120
+const columns = [
+{ label: 'Bio', baseWidth: 40 },
+{ label: 'Produit', baseWidth: 300 },
+{ label: 'Catégorie', baseWidth: 150 },
+{ label: 'Fournisseur', baseWidth: 120 },
+{ label: 'Prix', baseWidth: 80 },
+{ label: 'Quantité', baseWidth: 60 },
+{ label: 'Ajouter', baseWidth: 60 },
+];
+const ROW_HEIGHT = 50;
+/**
+* Rendu d'une ligne de données (sans en-tête).
+*/
+const RowRendererWithoutHeader = ({ index, style, data }) => {
+const { products, addToBasket, scaledColumns } = data;
+const product = products[index];
+if (!product) return null;
+const formattedPrice = parseFloat(product.price).toFixed(2);
+return (
+<div style={{ ...style, display: 'flex', borderBottom: '1px solid #eee' }}>
+{/* Colonne 1 : Bio */}
+<div
+style={{
+width: scaledColumns[0].scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+}}
+>
+{product.bio ? '🌿' : ''}
+</div>
+{/* Colonne 2 : Nom du produit */}
+<div
+style={{
+width: scaledColumns[1].scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+}}
+>
+{product.name}
+</div>
+{/* Colonne 3 : Catégorie */}
+<div
+style={{
+width: scaledColumns[2].scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+}}
+>
+{product.category}
+</div>
+{/* Colonne 4 : Fournisseur */}
+<div
+style={{
+width: scaledColumns[3].scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+}}
+>
+{product.supplier || ''}
+</div>
+{/* Colonne 5 : Prix (aligné à droite) */}
+<div
+style={{
+width: scaledColumns[4].scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+textAlign: 'right',
+}}
+>
+${formattedPrice}
+</div>
+{/* Colonne 6 : Quantité (fixée à "1" dans cet exemple minimal) */}
+<div
+style={{
+width: scaledColumns[5].scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+}}
+>
+1
+</div>
+{/* Colonne 7 : Bouton Ajouter */}
+<div
+style={{
+width: scaledColumns[6].scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+}}
+>
+<button onClick={() => addToBasket(product, 1)}>Ajouter</button>
+</div>
+</div>
+);
+};
+function VirtualizedProductsTable({ products, addToBasket }) {
+// Largeur totale de toutes les colonnes combinées, avant le redimensionnement
+const totalBaseWidth = columns.reduce((sum, col) => sum + col.baseWidth, 0);
+return (
+<div style={{ height: '80vh', width: '100%' }}>
+<AutoSizer>
+{({ width, height }) => {
+const ratio = totalBaseWidth > 0 ? width / totalBaseWidth : 1;
+const scaledColumns = columns.map((col) => ({
+label: col.label,
+scaledWidth: col.baseWidth * ratio,
+}));
+// Réserver de l'espace pour la ligne d'en-tête
+const headerHeight = ROW_HEIGHT;
+const listHeight = height - headerHeight;
+return (
+<>
+{/* En-tête fixe */}
+<div
+style={{
+width: `${width}px`,
+display: 'flex',
+backgroundColor: '#F5F3EB',
+fontWeight: 'bold',
+height: headerHeight,
+}}
+>
+{scaledColumns.map((col) => (
+<div
+key={col.label}
+style={{
+width: col.scaledWidth,
+padding: '8px',
+boxSizing: 'border-box',
+borderRight: '1px solid #ddd',
+}}
+>
+{col.label}
+</div>
+))}
+</div>
+{/* Liste déroulante des lignes */}
+<List
+height={listHeight}
+width={width}
+itemCount={products.length}
+itemSize={ROW_HEIGHT}
+itemData={{ products, addToBasket, scaledColumns }}
+>
+{RowRendererWithoutHeader}
+</List>
+</>
+);
+}}
+</AutoSizer>
+</div>
+);
+}
+export default VirtualizedProductsTable;
+
+
+
+# ** File: src/components/Basket.js **
+// src/components/Basket.js
+import React, { useState, useEffect } from 'react';
+import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/material';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBasketItem, saveOrder, isOrderAllowed }) {
+const [expanded, setExpanded] = useState(false);
+// État local pour suivre l'affichage du champ de commentaire pour chaque article.
+const [commentOpen, setCommentOpen] = useState({});
+// Lorsque le panier change, s'assurer que les articles avec un commentaire existant soient ouverts par défaut.
+useEffect(() => {
+setCommentOpen(prev => {
+const newState = { ...prev };
+basket.forEach(item => {
+if (item.comment && item.comment.trim() !== '' && !newState[item.id]) {
+newState[item.id] = true;
+}
+});
+return newState;
+});
+}, [basket]);
+const toggleExpand = () => setExpanded(!expanded);
+const toggleComment = (id) => {
+setCommentOpen(prev => ({ ...prev, [id]: !prev[id] }));
+};
+const totalCost = basket
+.reduce((acc, item) => acc + item.price * item.quantity, 0)
+.toFixed(2);
+return (
+<Box
+sx={{
+position: 'fixed',
+bottom: 0,
+left: 0,
+right: 0,
+backgroundColor: 'background.paper',
+borderTop: '1px solid',
+borderColor: 'grey.300',
+p: 2,
+boxShadow: 3,
+}}
+>
+<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+<Button onClick={toggleExpand} endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}>
+{expanded ? 'Masquer le panier' : 'Afficher le panier'}
+</Button>
+<Typography variant="body1">
+{basket.length} articles | Total : ${totalCost}
+</Typography>
+</Box>
+<Collapse in={expanded}>
+<Box sx={{ maxHeight: '50vh', overflowY: 'auto', mt: 2 }}>
+{basket.length === 0 ? (
+<Typography>Aucun article dans le panier</Typography>
+) : (
+<>
+{basket.map((item) => {
+const lineTotal = (item.price * item.quantity).toFixed(2);
+return (
+<Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', mb: 1, gap: 1 }}>
+<Box
+sx={{
+display: 'flex',
+alignItems: 'center',
+gap: 2,
+flexWrap: 'wrap',
+}}
+>
+<Typography sx={{ flex: 2 }}>
+{item.name} - ${parseFloat(item.price).toFixed(2)}
+</Typography>
+<Typography sx={{ width: '100px', textAlign: 'right' }}>
+${lineTotal}
+</Typography>
+<TextField
+type="number"
+value={item.quantity}
+onChange={(e) => updateBasketItem(item.id, parseInt(e.target.value, 10))}
+inputProps={{ min: 1 }}
+size="small"
+sx={{ width: '60px' }}
+/>
+<IconButton onClick={() => removeBasketItem(item.id)}>
+<RemoveCircleOutlineIcon />
+</IconButton>
+<Button variant="text" onClick={() => toggleComment(item.id)}>
+{commentOpen[item.id] ? 'Masquer le commentaire' : 'Ajouter un commentaire'}
+</Button>
+</Box>
+{commentOpen[item.id] && (
+<TextField
+label="Commentaire"
+variant="outlined"
+fullWidth
+value={item.comment || ''}
+onChange={(e) => updateBasketItemComment(item.id, e.target.value)}
+/>
+)}
+</Box>
+);
+})}
+</>
+)}
+</Box>
+{basket.length > 0 && (
+<>
+{!isOrderAllowed && (
+<Typography variant="caption" color="error" sx={{ display: 'block', mt: 1 }}>
+Les commandes ne peuvent être passées que du lundi au mercredi.
+</Typography>
+)}
+</>
+)}
+</Collapse>
+</Box>
+);
+}
+export default Basket;
+
+
+
+# ** File: src/components/ProductsPage.js **
+// src/components/ProductsPage.js
+import React, { useState, useEffect, useRef } from 'react';
+import {
+collection,
+onSnapshot,
+addDoc,
+updateDoc,
+doc,
+getDocs,
+query,
+where,
+serverTimestamp,
+} from 'firebase/firestore';
+import { firestore } from '../firebase';
+import Basket from './Basket';
+import VirtualizedProductsTable from './VirtualizedProductsTable';
+import { Link } from 'react-router-dom';
+import {
+Container,
+Typography,
+Button,
+TextField,
+Box,
+FormControl,
+InputLabel,
+Select,
+MenuItem,
+FormControlLabel,
+Checkbox,
+} from '@mui/material';
+import Logo from '../logo.svg';
+function ProductsPage({ user }) {
+const [products, setProducts] = useState([]);
+const [basket, setBasket] = useState([]);
+const [userAddress, setUserAddress] = useState('');
+const [activeOrderId, setActiveOrderId] = useState(null);
+const [searchTerm, setSearchTerm] = useState('');
+const [selectedCategory, setSelectedCategory] = useState('');
+const [selectedSupplier, setSelectedSupplier] = useState('');
+const [bioOnly, setBioOnly] = useState(false);
+const lastRemoteBasketRef = useRef([]);
+const today = new Date();
+const allowedDays = [1, 2, 3];
+const bypassOrderRestrictions = process.env.REACT_APP_BYPASS_ORDER_RESTRICTION === 'true';
+const isOrderAllowed = bypassOrderRestrictions || allowedDays.includes(today.getDay());
+function getWeekCode(date) {
+const target = new Date(date.valueOf());
+const dayNr = (target.getDay() + 6) % 7;
+target.setDate(target.getDate() - dayNr + 3);
+const firstThursday = new Date(target.getFullYear(), 0, 4);
+const diff = target - firstThursday;
+const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
+return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
+}
+const currentWeek = getWeekCode(today);
+// Retrieve user's address from res_partner
+useEffect(() => {
+if (user && user.email) {
+const fetchAddress = async () => {
+try {
+const partnersRef = collection(firestore, 'res_partner');
+const qPartner = query(partnersRef, where('email', '==', user.email));
+const querySnapshot = await getDocs(qPartner);
+if (!querySnapshot.empty) {
+const partnerData = querySnapshot.docs[0].data();
+setUserAddress(partnerData.contact_address_complete || '');
+}
+} catch (error) {
+console.error("Erreur lors de la récupération de l'adresse depuis res_partner", error);
+}
+};
+fetchAddress();
+}
+}, [user]);
+// Retrieve all products
+useEffect(() => {
+const productsRef = collection(firestore, 'products');
+const unsubscribe = onSnapshot(productsRef, snapshot => {
+const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+setProducts(prods);
+});
+return () => unsubscribe();
+}, []);
+// Load an open order
+useEffect(() => {
+const ordersRef = collection(firestore, 'orders');
+const qOrders = query(
+ordersRef,
+where('userId', '==', user.uid),
+where('status', '==', 'open')
+);
+const unsubscribe = onSnapshot(qOrders, snapshot => {
+if (!snapshot.empty) {
+const openOrders = snapshot.docs.sort((a, b) => {
+const aTime = a.data().updatedAt ? a.data().updatedAt.seconds : 0;
+const bTime = b.data().updatedAt ? b.data().updatedAt.seconds : 0;
+return bTime - aTime;
+});
+const activeOrder = openOrders[0];
+const data = activeOrder.data();
+setActiveOrderId(activeOrder.id);
+const remoteItems = data.items || [];
+if (JSON.stringify(remoteItems) !== JSON.stringify(basket)) {
+setBasket(remoteItems);
+}
+lastRemoteBasketRef.current = remoteItems;
+console.log(`[ProductsPage] Chargement de la commande active ${activeOrder.id} avec le panier :`, remoteItems);
+} else {
+setActiveOrderId(null);
+setBasket([]);
+lastRemoteBasketRef.current = [];
+}
+});
+return () => unsubscribe();
+}, [user.uid]);
+// Basket modifications
+const addToBasket = (product, quantity) => {
+console.log(`[ProductsPage] addToBasket: productId=${product.id}, quantity=${quantity}`);
+setBasket(prev => {
+const existing = prev.find(item => item.id === product.id);
+if (existing) {
+return prev.map(item =>
+item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+);
+} else {
+return [...prev, { ...product, quantity }];
+}
+});
+};
+const updateBasketItem = (id, newQuantity) => {
+console.log(`[ProductsPage] updateBasketItem: id=${id}, newQuantity=${newQuantity}`);
+setBasket(prev =>
+prev.map(item => (item.id === id ? { ...item, quantity: newQuantity } : item))
+);
+};
+const updateBasketItemComment = (id, comment) => {
+setBasket(prev =>
+prev.map(item => (item.id === id ? { ...item, comment } : item))
+);
+};
+const removeBasketItem = id => {
+console.log(`[ProductsPage] removeBasketItem: id=${id}`);
+setBasket(prev => prev.filter(item => item.id !== id));
+};
+// Manual order saving
+const saveOrder = async () => {
+if (basket.length === 0) {
+alert("Le panier est vide !");
+return;
+}
+if (!isOrderAllowed) {
+alert("Les commandes ne peuvent être passées que du lundi au mercredi.");
+return;
+}
+const orderData = {
+userId: user.uid,
+email: user.email,
+items: basket,
+weekCode: getWeekCode(new Date()),
+status: "open",
+updatedAt: serverTimestamp(),
+createdAt: serverTimestamp(),
+};
+try {
+if (activeOrderId) {
+await updateDoc(doc(firestore, 'orders', activeOrderId), orderData);
+console.log(`[ProductsPage] saveOrder: Commande ${activeOrderId} mise à jour avec succès`);
+alert('Commande mise à jour !');
+} else {
+const docRef = await addDoc(collection(firestore, 'orders'), orderData);
+setActiveOrderId(docRef.id);
+console.log(`[ProductsPage] saveOrder: Commande ${docRef.id} créée avec succès`);
+alert('Commande créée et enregistrée !');
+}
+} catch (error) {
+console.error('[ProductsPage] saveOrder: Erreur lors de l\'enregistrement de la commande', error);
+alert('Erreur lors de l\'enregistrement de la commande');
+}
+};
+// Auto-save effect
+useEffect(() => {
+const timeoutId = setTimeout(() => {
+if (!activeOrderId && basket.length > 0) {
+const orderData = {
+userId: user.uid,
+email: user.email,
+items: basket,
+weekCode: getWeekCode(new Date()),
+status: "open",
+updatedAt: serverTimestamp(),
+createdAt: serverTimestamp(),
+};
+addDoc(collection(firestore, 'orders'), orderData)
+.then(docRef => {
+setActiveOrderId(docRef.id);
+lastRemoteBasketRef.current = basket;
+console.log(`[ProductsPage] Auto-création de la commande ${docRef.id}`);
+})
+.catch(error => {
+console.error(`[ProductsPage] Erreur lors de la création automatique de la commande`, error);
+});
+} else if (activeOrderId && basket.length > 0) {
+if (JSON.stringify(basket) !== JSON.stringify(lastRemoteBasketRef.current)) {
+updateDoc(doc(firestore, 'orders', activeOrderId), {
+items: basket,
+updatedAt: serverTimestamp(),
+})
+.then(() => {
+console.log(`[ProductsPage] Panier mis à jour pour la commande ${activeOrderId}`);
+lastRemoteBasketRef.current = basket;
+})
+.catch((error) => {
+console.error(`[ProductsPage] Erreur lors de la mise à jour de la commande ${activeOrderId}`, error);
+});
+}
+}
+}, 500);
+return () => clearTimeout(timeoutId);
+}, [basket, activeOrderId, user.uid]);
+// Extract distinct categories and suppliers from products
+const distinctCategories = Array.from(new Set(products.map(p => p.category))).sort();
+const distinctSuppliers = Array.from(new Set(products.map(p => p.supplier))).sort();
+// Filter products based on search, category, supplier, and bio-only filter
+const filteredProducts = products.filter(product => {
+const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
+const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
+const matchesSupplier = selectedSupplier ? product.supplier === selectedSupplier : true;
+const matchesBio = bioOnly ? product.bio === true : true;
+return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
+});
+console.log(
+`[ProductsPage] render: searchTerm="${searchTerm}", selectedCategory="${selectedCategory}", selectedSupplier="${selectedSupplier}", bioOnly=${bioOnly}, totalProducts=${products.length}, filteredProducts=${filteredProducts.length}`
+);
+return (
+<Container sx={{ pt: 4, pb: 10 }}>
+<Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+<Box>
+<img src={Logo} alt="Logo" style={{ height: '40px', marginBottom: '10px' }} />
+<br />
+<Button variant="outlined" component={Link} to="/orders" sx={{ mt: 1 }}>
+Voir l'historique des commandes
+</Button>
+</Box>
+<Box sx={{ textAlign: 'right' }}>
+{user && (
+<>
+<Typography variant="body1" sx={{ fontWeight: 'bold' }}>
+{user.email}
+</Typography>
+{userAddress && (
+<Typography variant="body2" sx={{ color: 'text.secondary' }}>
+{userAddress}
+</Typography>
+)}
+<Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
+Semaine: {currentWeek}
+</Typography>
+</>
+)}
+</Box>
+</Box>
+<Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', px: 0 }}>
+<Box sx={{ py: 3, borderBottom: '1px solid #DDD' }}>
+<Typography variant="h4" sx={{ fontWeight: 'bold', mb: 2 }}>
+Produits
+</Typography>
+<Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+<TextField
+label="Rechercher"
+variant="outlined"
+fullWidth
+value={searchTerm}
+onChange={(e) => setSearchTerm(e.target.value)}
+/>
+<FormControl sx={{ minWidth: 200 }}>
+<InputLabel>Catégorie</InputLabel>
+<Select
+value={selectedCategory}
+onChange={(e) => setSelectedCategory(e.target.value)}
+label="Catégorie"
+>
+<MenuItem value="">Toutes</MenuItem>
+{distinctCategories.map((cat) => (
+<MenuItem key={cat} value={cat}>
+{cat}
+</MenuItem>
+))}
+</Select>
+</FormControl>
+<FormControl sx={{ minWidth: 200 }}>
+<InputLabel>Fournisseur</InputLabel>
+<Select
+value={selectedSupplier}
+onChange={(e) => setSelectedSupplier(e.target.value)}
+label="Fournisseur"
+>
+<MenuItem value="">Tous</MenuItem>
+{distinctSuppliers.map((sup) => (
+<MenuItem key={sup} value={sup}>
+{sup}
+</MenuItem>
+))}
+</Select>
+</FormControl>
+<FormControlLabel
+control={
+<Checkbox
+checked={bioOnly}
+onChange={(e) => setBioOnly(e.target.checked)}
+/>
+}
+label="Bio seulement"
+/>
+</Box>
+</Box>
+<Box className="table-container">
+<VirtualizedProductsTable
+products={filteredProducts}
+addToBasket={addToBasket}
+/>
+</Box>
+<Basket
+basket={basket}
+updateBasketItem={updateBasketItem}
+updateBasketItemComment={updateBasketItemComment}
+removeBasketItem={removeBasketItem}
+saveOrder={saveOrder}
+isOrderAllowed={isOrderAllowed}
+/>
+</Box>
+{/* Panier dupliqué si nécessaire en bas */}
+<Basket
+basket={basket}
+updateBasketItem={updateBasketItem}
+updateBasketItemComment={updateBasketItemComment}
+removeBasketItem={removeBasketItem}
+saveOrder={saveOrder}
+isOrderAllowed={isOrderAllowed}
+/>
+</Container>
+);
+}
+export default ProductsPage;
+
