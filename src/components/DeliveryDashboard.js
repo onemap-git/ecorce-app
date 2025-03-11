@@ -41,6 +41,7 @@ function ReplaceOrdersSelectionDialog({
   ordersForReplacement,
   selectedOrders,
   setSelectedOrders,
+  oldProductIdToReplace,   // <-- We need to know which product ID we are showing quantity for
   onClose,
   onNext
 }) {
@@ -61,27 +62,37 @@ function ReplaceOrdersSelectionDialog({
         <Typography variant="body2" sx={{ mb: 2 }}>
           The following orders contain the old product. Check which orders should have it replaced.
         </Typography>
-
         {ordersForReplacement.length === 0 ? (
           <Typography>No orders found that contain the old product.</Typography>
         ) : (
-          ordersForReplacement.map(order => (
-            <Box key={order.id} sx={{ mb: 1 }}>
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={selectedOrders.includes(order.id)}
-                    onChange={() => handleToggleOrder(order.id)}
-                  />
-                }
-                label={`Order ID: ${order.id} | ${order.email || ''}`}
-              />
-            </Box>
-          ))
+          ordersForReplacement.map((order) => {
+            // Find the item in this order that matches oldProductIdToReplace
+            const matchingItem = order.items.find(
+              (item) => item.id === oldProductIdToReplace
+            );
+            const quantity = matchingItem ? matchingItem.quantity : 0;
+
+            return (
+              <Box key={order.id} sx={{ mb: 1 }}>
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      checked={selectedOrders.includes(order.id)}
+                      onChange={() => handleToggleOrder(order.id)}
+                    />
+                  }
+                  // We add the quantity to the label
+                  label={`Order ID: ${order.id} | ${order.email || ''} | Qty: ${quantity}`}
+                />
+              </Box>
+            );
+          })
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose} color="secondary">Cancel</Button>
+        <Button onClick={onClose} color="secondary">
+          Cancel
+        </Button>
         <Button
           onClick={onNext}
           variant="contained"
@@ -445,6 +456,7 @@ export default function DeliveryDashboard({ user }) {
         ordersForReplacement={ordersForReplacement}
         selectedOrders={selectedOrdersForReplacement}
         setSelectedOrders={setSelectedOrdersForReplacement}
+        oldProductIdToReplace={oldProductIdToReplace}
         onClose={handleCloseReplaceOrdersSelection}
         onNext={handleNextFromReplaceOrdersSelection}
       />

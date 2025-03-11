@@ -1,5 +1,5 @@
 # Combined source code for commit: 123
-# Generated on: 2025-03-11 18:55:47
+# Generated on: 2025-03-11 19:20:04
 
 
 
@@ -1234,7 +1234,7 @@ Category: {product.category}
 variant="contained"
 onClick={() => addToBasket(product, 1)}
 >
-Add
+Ajouter
 </Button>
 </Box>
 </ListItem>
@@ -1448,6 +1448,7 @@ open,
 ordersForReplacement,
 selectedOrders,
 setSelectedOrders,
+oldProductIdToReplace,   // <-- We need to know which product ID we are showing quantity for
 onClose,
 onNext
 }) {
@@ -1469,7 +1470,13 @@ The following orders contain the old product. Check which orders should have it 
 {ordersForReplacement.length === 0 ? (
 <Typography>No orders found that contain the old product.</Typography>
 ) : (
-ordersForReplacement.map(order => (
+ordersForReplacement.map((order) => {
+// Find the item in this order that matches oldProductIdToReplace
+const matchingItem = order.items.find(
+(item) => item.id === oldProductIdToReplace
+);
+const quantity = matchingItem ? matchingItem.quantity : 0;
+return (
 <Box key={order.id} sx={{ mb: 1 }}>
 <FormControlLabel
 control={
@@ -1478,14 +1485,18 @@ checked={selectedOrders.includes(order.id)}
 onChange={() => handleToggleOrder(order.id)}
 />
 }
-label={`Order ID: ${order.id} | ${order.email || ''}`}
+// We add the quantity to the label
+label={`Order ID: ${order.id} | ${order.email || ''} | Qty: ${quantity}`}
 />
 </Box>
-))
+);
+})
 )}
 </DialogContent>
 <DialogActions>
-<Button onClick={onClose} color="secondary">Cancel</Button>
+<Button onClick={onClose} color="secondary">
+Cancel
+</Button>
 <Button
 onClick={onNext}
 variant="contained"
@@ -2394,7 +2405,7 @@ lastRemoteBasketRef.current = [];
 }
 });
 return () => unsubscribe();
-}, [user.uid, basket]);
+}, [user.uid]);
 // ------------------------------------------------------------------
 //  Basket modifications
 // ------------------------------------------------------------------
@@ -2678,6 +2689,7 @@ orders,
 aggregatedBySupplier,
 supplierInvoiceUrl,
 reloadInvoices,
+currentWeek,
 };
 }
 

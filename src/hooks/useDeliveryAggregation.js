@@ -77,5 +77,6 @@ export function useDeliveryAggregation() {
     aggregatedBySupplier,
     supplierInvoiceUrl,
     reloadInvoices,
+    currentWeek,
   };
 }

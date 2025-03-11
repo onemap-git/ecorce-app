@@ -44,7 +44,7 @@ function MobileProductsList({ products, addToBasket }) {
               variant="contained" 
               onClick={() => addToBasket(product, 1)}
             >
-              Add
+              Ajouter
             </Button>
           </Box>
         </ListItem>
