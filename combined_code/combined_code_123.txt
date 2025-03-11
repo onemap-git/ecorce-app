@@ -1,5 +1,5 @@
 # Combined source code for commit: 123
-# Generated on: 2025-03-11 12:54:24
+# Generated on: 2025-03-11 18:55:47
 
 
 
@@ -238,34 +238,62 @@ return parseFloat(value).toFixed(2);
 // src/utils/pdfUtils.js
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+// 1) Import your local logo image
+import logo from '../logo.png';
+/**
+* Exports a PDF with items sorted alphabetically by 'name',
+* plus a custom header with the site logo.
+*/
 export function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierLabel) {
+// Sort items by name
+const sortedItems = [...aggregatedItemsArray].sort((a, b) => {
+const nameA = (a.name || '').toLowerCase();
+const nameB = (b.name || '').toLowerCase();
+return nameA.localeCompare(nameB);
+});
 const doc = new jsPDF();
+// 2) Insert the logo at top-left corner
+//    x=10, y=10, width=30, height auto (approx)
+doc.addImage(logo, 'PNG', 10, 10, 30, 0);
+// Optionally, add a horizontal line or some text offset
+doc.setLineWidth(0.5);
+// For example, draw a line from x=10 to x=200 at y=25
+doc.line(10, 25, 200, 25);
+// 3) Add main title or text below the logo/line
+//    Move startY further down if needed
+let startY = 35; // move content down so it doesn't overlap
 doc.setFontSize(16);
-doc.text(`Aggregated Products - Week ${currentWeek}`, 14, 20);
+doc.text(`Aggregated Products - Week ${currentWeek}`, 14, startY);
+startY += 10;
 doc.setFontSize(12);
 if (supplierLabel) {
-doc.text(`Supplier: ${supplierLabel}`, 14, 30);
+doc.text(`Supplier: ${supplierLabel}`, 14, startY);
+startY += 10;
 }
+// 4) Prepare columns
 const columns = [
 { header: 'ID - Name', dataKey: 'name' },
 { header: 'Qty', dataKey: 'quantity' },
 { header: 'Price', dataKey: 'price' },
-{ header: 'Line Total', dataKey: 'total' }
+{ header: 'Line Total', dataKey: 'total' },
 ];
-const rows = aggregatedItemsArray.map(item => ({
+// 5) Prepare row data for autoTable
+const rows = sortedItems.map((item) => ({
 name: `ID: ${item.id} - ${item.name}`,
 quantity: item.quantity,
 price: `$${parseFloat(item.price).toFixed(2)}`,
-total: `$${(item.price * item.quantity).toFixed(2)}`
+total: `$${(item.price * item.quantity).toFixed(2)}`,
 }));
+// 6) Use autoTable, starting below the header
 autoTable(doc, {
-startY: 40,
-head: [columns.map(col => col.header)],
-body: rows.map(row => columns.map(col => row[col.dataKey])),
+startY: startY, // use the updated startY
+head: [columns.map((col) => col.header)],
+body: rows.map((row) => columns.map((col) => row[col.dataKey])),
 styles: { fontSize: 10 },
 headStyles: { fillColor: [41, 128, 185] },
-margin: { horizontal: 14 }
+margin: { horizontal: 14 },
 });
+// 7) Save the PDF
 doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierLabel}` : ''}.pdf`);
 }
 
@@ -300,7 +328,11 @@ List,
 ListItem,
 ListItemText,
 Button,
-Box
+Box,
+FormControl,
+InputLabel,
+Select,
+MenuItem
 } from '@mui/material';
 export default function AddProductDialog({ open, onClose, onProductSelect }) {
 // mode can be "select" (choose an existing product) or "manual" (add new)
@@ -308,7 +340,12 @@ const [mode, setMode] = useState('select');
 const [searchTerm, setSearchTerm] = useState('');
 const [products, setProducts] = useState([]);
 // State for manual product form
-const [newProduct, setNewProduct] = useState({ name: '', code: '', price: '' });
+const [newProduct, setNewProduct] = useState({
+name: '',
+code: '',
+price: '',
+supplier: '' // <--- New field for supplier
+});
 const [loading, setLoading] = useState(false);
 // Fetch available products
 useEffect(() => {
@@ -339,7 +376,7 @@ try {
 // Prepare new product data; tag it as manually added
 const newProdData = {
 ...newProduct,
-price: parseFloat(newProduct.price),
+price: parseFloat(newProduct.price) || 0,  // fallback to 0 if empty
 available: true,
 manuallyAdded: true
 };
@@ -349,7 +386,7 @@ const createdProduct = { id: docRef.id, ...newProdData };
 // Pass the new product to the parent so it can be added to the order
 onProductSelect(createdProduct);
 // Reset the manual form and mode
-setNewProduct({ name: '', code: '', price: '' });
+setNewProduct({ name: '', code: '', price: '', supplier: '' });
 setMode('select');
 } catch (error) {
 console.error("Error adding new product", error);
@@ -400,6 +437,7 @@ value={newProduct.name}
 onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
 required
 />
+{/* Code is now NOT mandatory, so removed 'required' */}
 <TextField
 label="Code du produit"
 variant="outlined"
@@ -407,7 +445,6 @@ fullWidth
 margin="normal"
 value={newProduct.code}
 onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
-required
 />
 <TextField
 label="Prix"
@@ -419,6 +456,20 @@ value={newProduct.price}
 onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
 required
 />
+{/* New dropdown for selecting a supplier */}
+<FormControl fullWidth margin="normal">
+<InputLabel>Fournisseur</InputLabel>
+<Select
+label="Fournisseur"
+value={newProduct.supplier}
+onChange={(e) => setNewProduct({ ...newProduct, supplier: e.target.value })}
+required
+>
+{/* Example static items; replace with dynamic data if needed */}
+<MenuItem value="Big Block">Big Block</MenuItem>
+<MenuItem value="canadawide">canadawide</MenuItem>
+</Select>
+</FormControl>
 <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
 <Button onClick={() => setMode('select')} color="primary">
 Retour
@@ -440,6 +491,257 @@ Ajouter un produit manuellement
 </DialogActions>
 )}
 </Dialog>
+);
+}
+
+
+
+# ** File: src/components/FilterBar.js **
+// src/components/FilterBar.js
+import React, { useState } from 'react';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import {
+Box,
+Button,
+Dialog,
+DialogTitle,
+DialogContent,
+DialogActions,
+TextField,
+FormControl,
+InputLabel,
+Select,
+MenuItem,
+FormControlLabel,
+Checkbox,
+Typography,
+} from '@mui/material';
+/**
+* A small dialog for mobile screens: user can pick filters.
+*/
+function MobileFiltersDialog({
+open,
+onClose,
+searchTerm,
+setSearchTerm,
+selectedCategory,
+setSelectedCategory,
+selectedSupplier,
+setSelectedSupplier,
+bioOnly,
+setBioOnly,
+distinctCategories,
+distinctSuppliers,
+}) {
+return (
+<Dialog open={open} onClose={onClose} fullWidth>
+<DialogTitle>Filtrer</DialogTitle>
+<DialogContent dividers>
+<TextField
+label="Rechercher"
+variant="outlined"
+fullWidth
+value={searchTerm}
+onChange={(e) => setSearchTerm(e.target.value)}
+sx={{ mt: 2 }}
+/>
+<FormControl sx={{ width: '100%', mt: 2 }}>
+<InputLabel>Catégorie</InputLabel>
+<Select
+value={selectedCategory}
+onChange={(e) => setSelectedCategory(e.target.value)}
+label="Catégorie"
+>
+<MenuItem value="">Toutes</MenuItem>
+{distinctCategories.map((cat) => (
+<MenuItem key={cat} value={cat}>
+{cat}
+</MenuItem>
+))}
+</Select>
+</FormControl>
+<FormControl sx={{ width: '100%', mt: 2 }}>
+<InputLabel>Fournisseur</InputLabel>
+<Select
+value={selectedSupplier}
+onChange={(e) => setSelectedSupplier(e.target.value)}
+label="Fournisseur"
+>
+<MenuItem value="">Tous</MenuItem>
+{distinctSuppliers.map((sup) => (
+<MenuItem key={sup} value={sup}>
+{sup}
+</MenuItem>
+))}
+</Select>
+</FormControl>
+<FormControlLabel
+sx={{ mt: 2 }}
+control={
+<Checkbox
+checked={bioOnly}
+onChange={(e) => setBioOnly(e.target.checked)}
+/>
+}
+label="Bio seulement"
+/>
+</DialogContent>
+<DialogActions>
+<Button onClick={onClose}>Fermer</Button>
+</DialogActions>
+</Dialog>
+);
+}
+/**
+* FilterBar decides:
+* - On mobile: show a single "Filtrer" button -> opens MobileFiltersDialog
+* - On larger screens: show the filters inline
+*/
+export default function FilterBar({
+searchTerm,
+setSearchTerm,
+selectedCategory,
+setSelectedCategory,
+selectedSupplier,
+setSelectedSupplier,
+bioOnly,
+setBioOnly,
+distinctCategories,
+distinctSuppliers,
+}) {
+const theme = useTheme();
+const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+// State for opening the mobile dialog
+const [dialogOpen, setDialogOpen] = useState(false);
+if (!isMobile) {
+// --- Desktop / Tablet Layout (filters inline) ---
+return (
+<Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+<TextField
+label="Rechercher"
+variant="outlined"
+value={searchTerm}
+onChange={(e) => setSearchTerm(e.target.value)}
+sx={{ minWidth: 200 }}
+/>
+<FormControl sx={{ minWidth: 160 }}>
+<InputLabel>Catégorie</InputLabel>
+<Select
+value={selectedCategory}
+onChange={(e) => setSelectedCategory(e.target.value)}
+label="Catégorie"
+>
+<MenuItem value="">Toutes</MenuItem>
+{distinctCategories.map((cat) => (
+<MenuItem key={cat} value={cat}>
+{cat}
+</MenuItem>
+))}
+</Select>
+</FormControl>
+<FormControl sx={{ minWidth: 160 }}>
+<InputLabel>Fournisseur</InputLabel>
+<Select
+value={selectedSupplier}
+onChange={(e) => setSelectedSupplier(e.target.value)}
+label="Fournisseur"
+>
+<MenuItem value="">Tous</MenuItem>
+{distinctSuppliers.map((sup) => (
+<MenuItem key={sup} value={sup}>
+{sup}
+</MenuItem>
+))}
+</Select>
+</FormControl>
+<FormControlLabel
+control={
+<Checkbox
+checked={bioOnly}
+onChange={(e) => setBioOnly(e.target.checked)}
+/>
+}
+label="Bio seulement"
+/>
+</Box>
+);
+}
+// --- Mobile Layout (dialog) ---
+return (
+<>
+<Button
+variant="outlined"
+onClick={() => setDialogOpen(true)}
+sx={{ mb: 2 }}
+>
+Filtrer
+</Button>
+<MobileFiltersDialog
+open={dialogOpen}
+onClose={() => setDialogOpen(false)}
+searchTerm={searchTerm}
+setSearchTerm={setSearchTerm}
+selectedCategory={selectedCategory}
+setSelectedCategory={setSelectedCategory}
+selectedSupplier={selectedSupplier}
+setSelectedSupplier={setSelectedSupplier}
+bioOnly={bioOnly}
+setBioOnly={setBioOnly}
+distinctCategories={distinctCategories}
+distinctSuppliers={distinctSuppliers}
+/>
+</>
+);
+}
+
+
+
+# ** File: src/components/SignatureOverlay.js **
+// src/components/SignatureOverlay.js
+import React from 'react';
+import { Box, Button, Typography } from '@mui/material';
+import SignatureCanvas from 'react-signature-canvas';
+export default function SignatureOverlay({
+open,
+sigPadRef,
+onClear,
+onSave,
+onCancel
+}) {
+if (!open) return null;
+return (
+<Box
+sx={{
+position: 'fixed',
+top: 0, left: 0, right: 0, bottom: 0,
+backgroundColor: 'rgba(0,0,0,0.5)',
+display: 'flex', justifyContent: 'center', alignItems: 'center'
+}}
+>
+<Box sx={{ backgroundColor: '#fff', p: 2, borderRadius: 2 }}>
+<Typography variant="h6" gutterBottom>
+Signature
+</Typography>
+<SignatureCanvas
+ref={sigPadRef}
+penColor="black"
+canvasProps={{ width: 400, height: 200, className: 'sigCanvas' }}
+backgroundColor="#eee"
+/>
+<Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
+<Button variant="outlined" onClick={onClear}>
+Clear
+</Button>
+<Button variant="contained" onClick={onSave}>
+Save Signature
+</Button>
+<Button variant="text" onClick={onCancel}>
+Cancel
+</Button>
+</Box>
+</Box>
+</Box>
 );
 }
 
@@ -626,6 +928,190 @@ export default ProductRow;
 
 
 
+# ** File: src/components/AggregatedTable.js **
+// src/components/AggregatedTable.js
+import React from 'react';
+import { Box, Paper, Typography, Button, FormControlLabel, Checkbox, TextField } from '@mui/material';
+import { exportAggregatedPDF } from '../utils/pdfUtils';
+export default function AggregatedTable({
+aggregatedBySupplier,
+supplierInvoiceUrl,
+handleInvoiceFileChangeAndUpload,
+toggleCollected,
+updateChecklistField,
+checklist,
+handleOpenReplaceDialog,
+currentWeek,
+}) {
+if (Object.keys(aggregatedBySupplier).length === 0) {
+return <Typography>No aggregated products.</Typography>;
+}
+return (
+<>
+{Object.keys(aggregatedBySupplier)
+.sort()
+.map((supplier) => {
+const itemsObj = aggregatedBySupplier[supplier];
+const itemsArray = Object.values(itemsObj).sort((a, b) => a.name.localeCompare(b.name));
+const handleExportPDF = () => {
+exportAggregatedPDF(itemsArray, currentWeek, supplier);
+};
+return (
+<Paper key={supplier} sx={{ mb: 2, p: 2 }}>
+<Typography variant="h6" gutterBottom>
+Supplier: {supplier}
+</Typography>
+<Button variant="contained" onClick={handleExportPDF} sx={{ mb: 2 }}>
+Export PDF
+</Button>
+{/* Example of invoice image upload area */}
+<Box sx={{ mb: 2 }}>
+{/* ...unchanged invoice logic... */}
+</Box>
+{/* Responsive grid header */}
+<Box
+sx={{
+display: 'grid',
+// Use breakpoints to switch columns for small screens
+gridTemplateColumns: {
+xs: '1fr 1fr', // Only 2 columns on extra-small screens
+sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr', // Original columns on small+
+},
+gap: 1,
+mb: 1,
+fontWeight: 'bold',
+borderBottom: '1px solid #ccc',
+pb: 1,
+width: '100%'
+}}
+>
+<Typography>ID</Typography>
+<Typography>Name</Typography>
+{/* The next columns will be hidden on xs because we only have 2 columns on xs */}
+<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>Qty</Typography>
+<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>Coll.</Typography>
+<Typography sx={{ textAlign: 'center', display: { xs: 'none', sm: 'block' } }}>
+Collected
+</Typography>
+<Typography sx={{ textAlign: 'center', display: { xs: 'none', sm: 'block' } }}>
+New Price
+</Typography>
+<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+Orig
+</Typography>
+<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+Action
+</Typography>
+</Box>
+{/* Items rows */}
+{itemsArray.map(item => (
+<Box
+key={item.id}
+sx={{
+display: 'grid',
+gridTemplateColumns: {
+xs: '1fr 1fr',
+sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr'
+},
+alignItems: 'center',
+gap: 1,
+mb: 1,
+width: '100%'
+}}
+>
+<Typography>{item.id}</Typography>
+<Typography>{item.name}</Typography>
+{/* Quantity (hidden on xs) */}
+<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+{item.quantity}
+</Typography>
+{/* "Coll." checkbox (hidden on xs) */}
+<FormControlLabel
+control={
+<Checkbox
+checked={checklist[item.id]?.collected || false}
+onChange={() => toggleCollected(item.id)}
+/>
+}
+label=""
+sx={{
+mr: 0,
+display: { xs: 'none', sm: 'inline-flex' }
+}}
+/>
+{/* Collected input (hidden on xs) */}
+<TextField
+label="Collected"
+type="number"
+size="small"
+value={
+checklist[item.id]?.collectedQuantity !== undefined
+? checklist[item.id].collectedQuantity
+: ''
+}
+onChange={(e) => updateChecklistField(item.id, 'collectedQuantity', e.target.value)}
+// For mobile numeric keyboard
+inputProps={{
+min: 0,
+style: { textAlign: 'right' },
+inputMode: 'numeric',
+pattern: '[0-9]*'
+}}
+sx={{
+width: '100%',
+maxWidth: { xs: '90px', sm: '100%' },
+textAlign: 'right',
+display: { xs: 'none', sm: 'inline-flex' }
+}}
+/>
+{/* New Price input (hidden on xs) */}
+<TextField
+label="New Price"
+type="number"
+size="small"
+value={
+checklist[item.id]?.newPrice !== undefined
+? checklist[item.id].newPrice
+: ''
+}
+onChange={(e) => updateChecklistField(item.id, 'newPrice', e.target.value)}
+inputProps={{
+min: 0,
+style: { textAlign: 'right' },
+inputMode: 'decimal',
+pattern: '[0-9]*'
+}}
+sx={{
+width: '100%',
+maxWidth: { xs: '90px', sm: '100%' },
+textAlign: 'right',
+display: { xs: 'none', sm: 'inline-flex' }
+}}
+/>
+{/* Original Price */}
+<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+${parseFloat(item.price).toFixed(2)}
+</Typography>
+{/* Replace button */}
+<Button
+variant="outlined"
+size="small"
+onClick={() => handleOpenReplaceDialog(item.id)}
+sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+>
+Replace
+</Button>
+</Box>
+))}
+</Paper>
+);
+})}
+</>
+);
+}
+
+
+
 # ** File: src/components/Login.js **
 import React, { useState, useEffect } from 'react';
 import { isSignInWithEmailLink, signInWithEmailLink, sendSignInLinkToEmail } from 'firebase/auth';
@@ -701,6 +1187,77 @@ export default Login;
 import React from 'react';
 const NoTag = React.forwardRef(({ children }, ref) => <>{children}</>);
 export default NoTag;
+
+
+
+# ** File: src/components/ResponsiveProductsView.js **
+// src/components/ResponsiveProductsView.js
+import React from 'react';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import { List, ListItem, ListItemText, Box, Typography, Button } from '@mui/material';
+// Import your existing VirtualizedProductsTable:
+import VirtualizedProductsTable from './VirtualizedProductsTable';
+/**
+* A simple card-like list for mobile screens.
+* You can customize how many fields to display,
+* e.g., category, supplier, etc.
+*/
+function MobileProductsList({ products, addToBasket }) {
+return (
+<List>
+{products.map((product) => (
+<ListItem
+key={product.id}
+sx={{
+display: 'flex',
+flexDirection: 'column',
+alignItems: 'flex-start',
+borderBottom: '1px solid #eee'
+}}
+>
+<Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+{product.name}
+</Typography>
+{/* Example: Show Price and maybe Category */}
+<Typography variant="body2" sx={{ mt: 0.5 }}>
+Price: ${product.price?.toFixed(2)}
+</Typography>
+{product.category && (
+<Typography variant="body2" sx={{ color: 'grey.600' }}>
+Category: {product.category}
+</Typography>
+)}
+{/* "Add to Basket" button */}
+<Box sx={{ mt: 1 }}>
+<Button
+variant="contained"
+onClick={() => addToBasket(product, 1)}
+>
+Add
+</Button>
+</Box>
+</ListItem>
+))}
+</List>
+);
+}
+/**
+* A wrapper that detects if we're on a small screen:
+* - If yes, render the mobile list
+* - If no, render the VirtualizedProductsTable
+*/
+export default function ResponsiveProductsView({ products, addToBasket }) {
+const theme = useTheme();
+const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+if (isMobile) {
+// Card/list layout for mobile
+return <MobileProductsList products={products} addToBasket={addToBasket} />;
+} else {
+// Original table for larger screens
+return <VirtualizedProductsTable products={products} addToBasket={addToBasket} />;
+}
+}
 
 
 
@@ -850,220 +1407,183 @@ export default DeliveredOrderCard;
 
 # ** File: src/components/DeliveryDashboard.js **
 // src/components/DeliveryDashboard.js
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import {
-collection,
-query,
-where,
-onSnapshot,
 updateDoc,
 setDoc,
 doc,
-getDoc,
-getDocs,
 serverTimestamp
 } from 'firebase/firestore';
 import { firestore, storage } from '../firebase';
-import SignatureCanvas from 'react-signature-canvas';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import {
+ref,
+uploadBytesResumable,
+getDownloadURL
+} from 'firebase/storage';
 import {
 Box,
 Typography,
-Paper,
 Button,
-TextField,
-FormControlLabel,
-Checkbox,
 Dialog,
 DialogTitle,
 DialogContent,
-DialogActions
+DialogActions,
+TextField,
+Checkbox,
+FormControlLabel
 } from '@mui/material';
-import Logo from '../logo.png';
+import { useDeliveryAggregation } from '../hooks/useDeliveryAggregation';
+import AggregatedTable from './AggregatedTable';
+import SignatureOverlay from './SignatureOverlay';
 import DeliveredOrderCard from './DeliveredOrderCard';
 import AddProductDialog from './AddProductDialog';
 import OrderCard from './OrderCard';
 import { getWeekCode } from '../utils/dateUtils';
-import { exportAggregatedPDF } from '../utils/pdfUtils';
-function DeliveryDashboard({ user }) {
-const [orders, setOrders] = useState([]);
-const [sigPadOpen, setSigPadOpen] = useState(null); // ID of order being signed
+/**
+* A new dialog that shows which orders contain the old product,
+* allowing the user to select which orders get replaced.
+*/
+function ReplaceOrdersSelectionDialog({
+open,
+ordersForReplacement,
+selectedOrders,
+setSelectedOrders,
+onClose,
+onNext
+}) {
+if (!open) return null;
+const handleToggleOrder = (orderId) => {
+if (selectedOrders.includes(orderId)) {
+setSelectedOrders(selectedOrders.filter(id => id !== orderId));
+} else {
+setSelectedOrders([...selectedOrders, orderId]);
+}
+};
+return (
+<Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+<DialogTitle>Select Orders to Replace</DialogTitle>
+<DialogContent dividers>
+<Typography variant="body2" sx={{ mb: 2 }}>
+The following orders contain the old product. Check which orders should have it replaced.
+</Typography>
+{ordersForReplacement.length === 0 ? (
+<Typography>No orders found that contain the old product.</Typography>
+) : (
+ordersForReplacement.map(order => (
+<Box key={order.id} sx={{ mb: 1 }}>
+<FormControlLabel
+control={
+<Checkbox
+checked={selectedOrders.includes(order.id)}
+onChange={() => handleToggleOrder(order.id)}
+/>
+}
+label={`Order ID: ${order.id} | ${order.email || ''}`}
+/>
+</Box>
+))
+)}
+</DialogContent>
+<DialogActions>
+<Button onClick={onClose} color="secondary">Cancel</Button>
+<Button
+onClick={onNext}
+variant="contained"
+color="primary"
+disabled={ordersForReplacement.length === 0}
+>
+Next
+</Button>
+</DialogActions>
+</Dialog>
+);
+}
+export default function DeliveryDashboard({ user }) {
+const { orders, aggregatedBySupplier, supplierInvoiceUrl, currentWeek } = useDeliveryAggregation();
+// Signature pad
+const [sigPadOpen, setSigPadOpen] = useState(null);
 const sigPadRef = useRef(null);
-const printRef = useRef(null);
-const currentWeek = getWeekCode(new Date());
-// For supplier invoices
-const [supplierInvoiceUrl, setSupplierInvoiceUrl] = useState({});
-// -----------------------------
-// Existing "Add Product" feature
-// -----------------------------
+// Invoices
+const [supplierInvoiceUrlState, setSupplierInvoiceUrlState] = useState(supplierInvoiceUrl);
+// Checklist
+const [checklist, setChecklist] = useState({});
+// "Add Product" dialog
 const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
 const [selectedOrderForProductAddition, setSelectedOrderForProductAddition] = useState(null);
-// -----------------------------
-// New "Replace Product" feature
-// -----------------------------
-// We'll reuse AddProductDialog in "replace" mode, then show a confirm dialog.
+// Replace Feature
 const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
 const [oldProductIdToReplace, setOldProductIdToReplace] = useState(null);
-// A second dialog to confirm the replacement
-const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+// Step 2: user picks new product -> we open a selection dialog
 const [pendingNewProduct, setPendingNewProduct] = useState(null);
+// The new "Replace Orders Selection" dialog
+const [replaceOrdersSelectionOpen, setReplaceOrdersSelectionOpen] = useState(false);
+const [ordersForReplacement, setOrdersForReplacement] = useState([]);
+const [selectedOrdersForReplacement, setSelectedOrdersForReplacement] = useState([]);
+// The final confirmation
+const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
 const [ordersAffectedCount, setOrdersAffectedCount] = useState(0);
-// 1) Fetch orders for current week
-useEffect(() => {
-const wc = getWeekCode(new Date());
-const ordersRef = collection(firestore, 'orders');
-const qOrders = query(ordersRef, where('weekCode', '==', wc));
-const unsub = onSnapshot(qOrders, (snapshot) => {
-const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-setOrders(data);
-});
-return () => unsub();
-}, []);
-// 2) Aggregate items by supplier
-const aggregatedBySupplier = {};
-orders.forEach(order => {
-if (order.items) {
-order.items.forEach(item => {
-const supplier = item.supplier || 'Unknown';
-if (!aggregatedBySupplier[supplier]) {
-aggregatedBySupplier[supplier] = {};
-}
-if (!aggregatedBySupplier[supplier][item.id]) {
-aggregatedBySupplier[supplier][item.id] = { ...item };
-} else {
-aggregatedBySupplier[supplier][item.id].quantity += item.quantity;
-}
-});
-}
-});
-// 3) Check if there's an uploaded invoice in Firestore for each supplier
-useEffect(() => {
-const loadAllSupplierInvoices = async () => {
-for (const supplier of Object.keys(aggregatedBySupplier)) {
-const docId = `${currentWeek}_${supplier}`;
-const invoiceDocRef = doc(firestore, 'delivery_invoices', docId);
-const snapshot = await getDoc(invoiceDocRef);
-if (snapshot.exists()) {
-const data = snapshot.data();
-if (data.invoiceUrl) {
-setSupplierInvoiceUrl((prev) => ({
-...prev,
-[supplier]: data.invoiceUrl
-}));
-}
-}
-}
-};
-loadAllSupplierInvoices();
-}, [currentWeek, aggregatedBySupplier]);
-// 4) Checklist logic
-const [checklist, setChecklist] = useState({});
-useEffect(() => {
-const wc = getWeekCode(new Date());
-const checklistRef = collection(firestore, 'delivery_checklist');
-const qC = query(checklistRef, where('weekCode', '==', wc));
-const unsub = onSnapshot(qC, (snapshot) => {
-const data = {};
-snapshot.docs.forEach(docSnap => {
-const d = docSnap.data();
-data[d.productId] = { id: docSnap.id, ...d };
-});
-setChecklist(data);
-});
-return () => unsub();
-}, []);
+// Derived orders
+const activeOrders = orders.filter(o => o.deliveryStatus !== 'delivered');
+const deliveredOrders = orders.filter(o => o.deliveryStatus === 'delivered');
+const sortedActiveOrders = [...activeOrders].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+const sortedDeliveredOrders = [...deliveredOrders].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
+// --------------------------------------------------
+//  Checklist methods (example placeholders)
+// --------------------------------------------------
 const toggleCollected = async (productId) => {
-const wc = getWeekCode(new Date());
-if (checklist[productId]) {
-const newStatus = !checklist[productId].collected;
-try {
-await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
-collected: newStatus,
-updatedAt: serverTimestamp()
-});
-} catch (error) {
-console.error('Error updating checklist', error);
-}
-} else {
-try {
-const newDocRef = doc(collection(firestore, 'delivery_checklist'));
-await setDoc(newDocRef, {
-weekCode: wc,
-productId,
-collected: true,
-collectedQuantity: 0,
-newPrice: 0,
-createdAt: serverTimestamp(),
-updatedAt: serverTimestamp()
-});
-} catch (error) {
-console.error('Error creating checklist document', error);
-}
-}
+// your existing logic...
 };
 const updateChecklistField = async (productId, field, value) => {
-const wc = getWeekCode(new Date());
-const numericValue = parseFloat(value) || 0;
-if (checklist[productId]) {
+// your existing logic...
+};
+// --------------------------------------------------
+//  Invoices
+// --------------------------------------------------
+const handleInvoiceFileChangeAndUpload = async (supplier, file) => {
 try {
-await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
-[field]: numericValue,
+const invoiceRef = ref(storage, `invoices/${currentWeek}/${supplier}/${file.name}`);
+const uploadTask = uploadBytesResumable(invoiceRef, file);
+uploadTask.on(
+'state_changed',
+() => {},
+(error) => {
+console.error('Upload error:', error);
+alert('Error uploading invoice');
+},
+async () => {
+const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+const docId = `${currentWeek}_${supplier}`;
+await setDoc(
+doc(firestore, 'delivery_invoices', docId),
+{
+weekCode: currentWeek,
+invoiceUrl: downloadURL,
 updatedAt: serverTimestamp()
-});
-} catch (error) {
-console.error('Error updating checklist field', error);
+},
+{ merge: true }
+);
+setSupplierInvoiceUrlState((prev) => ({
+...prev,
+[supplier]: downloadURL
+}));
 }
-} else {
-try {
-const newDocRef = doc(collection(firestore, 'delivery_checklist'));
-await setDoc(newDocRef, {
-weekCode: wc,
-productId,
-collected: false,
-collectedQuantity: field === 'collectedQuantity' ? numericValue : 0,
-newPrice: field === 'newPrice' ? numericValue : 0,
-createdAt: serverTimestamp(),
-updatedAt: serverTimestamp()
-});
-} catch (error) {
-console.error('Error creating checklist document', error);
-}
+);
+} catch (err) {
+console.error('Error uploading invoice', err);
 }
 };
-// 5) Active vs. delivered orders
-const activeOrders = orders.filter(order => order.deliveryStatus !== 'delivered');
-const deliveredOrders = orders.filter(order => order.deliveryStatus === 'delivered');
-// 7) Quantity update for order items
+// --------------------------------------------------
+//  Order item modifications
+// --------------------------------------------------
 const handleQuantityChange = async (orderId, itemId, newQty) => {
-const order = orders.find(o => o.id === orderId);
-if (!order) return;
-const updatedItems = order.items.map(item => {
-if (item.id === itemId) {
-return { ...item, quantity: parseInt(newQty, 10) || 0 };
-}
-return item;
-});
-try {
-await updateDoc(doc(firestore, 'orders', orderId), {
-items: updatedItems,
-updatedAt: serverTimestamp()
-});
-} catch (err) {
-console.error('Error updating quantity', err);
-}
+// your existing logic
 };
-// 8) Mark order as delivered
 const markAsDelivered = async (orderId) => {
-try {
-await updateDoc(doc(firestore, 'orders', orderId), {
-deliveryStatus: 'delivered',
-deliveredAt: serverTimestamp()
-});
-} catch (err) {
-console.error('Error marking as delivered', err);
-}
+// your existing logic
 };
-// 6) Signature pad
+// --------------------------------------------------
+//  Signature pad
+// --------------------------------------------------
 const openSignaturePad = (orderId) => {
 setSigPadOpen(orderId);
 };
@@ -1084,9 +1604,9 @@ setSigPadOpen(null);
 console.error('Error saving signature', err);
 }
 };
-// -----------------------------
-// Existing "Add Product to Order" Feature
-// -----------------------------
+// --------------------------------------------------
+//  "Add Product to Order"
+// --------------------------------------------------
 const handleOpenAddProduct = (orderId) => {
 setSelectedOrderForProductAddition(orderId);
 setAddProductDialogOpen(true);
@@ -1096,37 +1616,12 @@ setAddProductDialogOpen(false);
 setSelectedOrderForProductAddition(null);
 };
 const handleAddProductToOrder = async (orderId, product) => {
-const order = orders.find(o => o.id === orderId);
-if (!order) return;
-let newItems = [];
-let found = false;
-if (order.items) {
-newItems = order.items.map(item => {
-if (item.id === product.id) {
-found = true;
-return { ...item, quantity: item.quantity + 1 };
-}
-return item;
-});
-} else {
-newItems = [];
-}
-if (!found) {
-newItems.push({ ...product, quantity: 1 });
-}
-try {
-await updateDoc(doc(firestore, 'orders', orderId), {
-items: newItems,
-updatedAt: serverTimestamp()
-});
-console.log(`Product ${product.name} added to order ${orderId}`);
-} catch (error) {
-console.error('Error adding product to order', error);
-}
+// your existing logic
 };
-// -----------------------------
-// New "Replace Product" Feature
-// -----------------------------
+// --------------------------------------------------
+//  "Replace Product" Feature
+// --------------------------------------------------
+// Step 1: user picks old product
 const handleOpenReplaceDialog = (oldProductId) => {
 setOldProductIdToReplace(oldProductId);
 setReplaceDialogOpen(true);
@@ -1135,45 +1630,55 @@ const handleCloseReplaceDialog = () => {
 setReplaceDialogOpen(false);
 setOldProductIdToReplace(null);
 };
-// Step 1: user picks new product in AddProductDialog -> confirm replacement
+// Step 2: user picks new product in AddProductDialog
 const handleStartReplaceConfirmation = (newProduct) => {
 if (!oldProductIdToReplace) return;
-// Count how many orders would be changed
-let count = 0;
-orders.forEach(order => {
-const items = order.items || [];
-if (items.some(item => item.id === oldProductIdToReplace)) {
-count++;
-}
-});
-setOrdersAffectedCount(count);
-// We'll store newProduct in state, then show the confirmation dialog
+// Identify which orders contain the old product
+const relevantOrders = orders.filter(order =>
+(order.items || []).some(item => item.id === oldProductIdToReplace)
+);
+setOrdersForReplacement(relevantOrders);
+// By default, select them all
+setSelectedOrdersForReplacement(relevantOrders.map(o => o.id));
 setPendingNewProduct(newProduct);
-// Close the replace product selection dialog
+// close "replace product selection" dialog
 setReplaceDialogOpen(false);
-// Open the final confirm dialog
+// open the new selection dialog
+setReplaceOrdersSelectionOpen(true);
+};
+// Step 3: user picks which orders get replaced
+const handleCloseReplaceOrdersSelection = () => {
+setReplaceOrdersSelectionOpen(false);
+setPendingNewProduct(null);
+setOldProductIdToReplace(null);
+};
+const handleNextFromReplaceOrdersSelection = () => {
+// We'll show the final confirm
+setOrdersAffectedCount(selectedOrdersForReplacement.length);
+setReplaceOrdersSelectionOpen(false);
 setReplaceConfirmOpen(true);
 };
-// Step 2: If user confirms, do the actual replacement
+// Step 4: final confirm
 const handleConfirmReplace = () => {
 if (!pendingNewProduct || !oldProductIdToReplace) return;
 handleReplaceProductInAllOrders(pendingNewProduct);
 setReplaceConfirmOpen(false);
 setPendingNewProduct(null);
 };
-// Step 2b: user cancels
 const handleCancelReplace = () => {
 setReplaceConfirmOpen(false);
 setPendingNewProduct(null);
 setOldProductIdToReplace(null);
 };
-/**
-* Actually replaces oldProductIdToReplace with newProduct across all relevant orders,
-* then re-aggregates local data so UI updates.
-*/
+// Step 5: actual replacement in the selected orders
 const handleReplaceProductInAllOrders = async (newProduct) => {
 let updatedCount = 0;
+// Only replace in the selected orders
 const newOrdersState = orders.map(order => {
+// If user did not select this order, skip
+if (!selectedOrdersForReplacement.includes(order.id)) {
+return order;
+}
 const items = order.items || [];
 let changed = false;
 const updatedItems = items.map(item => {
@@ -1202,73 +1707,14 @@ return { ...order, items: updatedItems };
 }
 return order;
 });
-console.log(`Replaced product ${oldProductIdToReplace} with ${newProduct.id} in ${updatedCount} orders.`);
-// Update local orders state
-setOrders(newOrdersState);
-// Re-aggregate
-const reAggregated = {};
-newOrdersState.forEach(order => {
-if (order.items) {
-order.items.forEach(item => {
-const supplier = item.supplier || 'Unknown';
-if (!reAggregated[supplier]) {
-reAggregated[supplier] = {};
-}
-if (!reAggregated[supplier][item.id]) {
-reAggregated[supplier][item.id] = { ...item };
-} else {
-reAggregated[supplier][item.id].quantity += item.quantity;
-}
-});
-}
-});
-// Overwrite aggregatedBySupplier
-Object.keys(aggregatedBySupplier).forEach(k => delete aggregatedBySupplier[k]);
-Object.keys(reAggregated).forEach(sup => {
-aggregatedBySupplier[sup] = reAggregated[sup];
-});
+console.log(
+`Replaced product ${oldProductIdToReplace} with ${newProduct.id} in ${updatedCount} selected orders.`
+);
 // Clear old product ID
 setOldProductIdToReplace(null);
-};
-// 9) PDF Export per supplier
-const handleExportPDF = (supplier) => {
-const itemsObj = aggregatedBySupplier[supplier] || {};
-const itemsArray = Object.values(itemsObj);
-exportAggregatedPDF(itemsArray, currentWeek, supplier);
-};
-// 10) Auto-upload invoices
-const handleInvoiceFileChangeAndUpload = async (supplier, file) => {
-try {
-const invoiceRef = ref(storage, `invoices/${currentWeek}/${supplier}/${file.name}`);
-const uploadTask = uploadBytesResumable(invoiceRef, file);
-uploadTask.on(
-'state_changed',
-() => {},
-(error) => {
-console.error('Upload error:', error);
-alert('Error uploading invoice');
-},
-async () => {
-const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-const docId = `${currentWeek}_${supplier}`;
-await setDoc(
-doc(firestore, 'delivery_invoices', docId),
-{
-weekCode: currentWeek,
-invoiceUrl: downloadURL,
-updatedAt: serverTimestamp()
-},
-{ merge: true }
-);
-setSupplierInvoiceUrl((prev) => ({
-...prev,
-[supplier]: downloadURL
-}));
-}
-);
-} catch (err) {
-console.error('Error uploading invoice', err);
-}
+// Reset selection
+setOrdersForReplacement([]);
+setSelectedOrdersForReplacement([]);
 };
 return (
 <Box sx={{ p: 2 }}>
@@ -1278,186 +1724,40 @@ Delivery Dashboard
 <Typography variant="body1" gutterBottom>
 Orders for week: {currentWeek}
 </Typography>
-{/* Aggregated Items, grouped by supplier */}
-<Box ref={printRef} sx={{ mt: 4, border: '1px solid #ccc', p: 2, borderRadius: 1 }}>
-<Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-<Typography variant="h5" sx={{ ml: 2 }}>
-Aggregated Lists - Week {currentWeek}
-</Typography>
-</Box>
-{Object.keys(aggregatedBySupplier).length === 0 ? (
-<Typography>No aggregated products.</Typography>
-) : (
-Object.keys(aggregatedBySupplier).map((supplier) => {
-const itemsObj = aggregatedBySupplier[supplier];
-const itemsArray = Object.values(itemsObj);
-return (
-<Paper key={supplier} sx={{ mb: 2, p: 2 }}>
-<Typography variant="h6" gutterBottom>
-Supplier: {supplier}
-</Typography>
-<Button
-variant="contained"
-onClick={() => handleExportPDF(supplier)}
-sx={{ mb: 2 }}
->
-Export PDF
-</Button>
-{/* Image upload area */}
-<Box sx={{ mb: 2 }}>
-{supplierInvoiceUrl[supplier] ? (
-<Box
-onClick={() => {
-document.getElementById(`invoice-input-${supplier}`).click();
-}}
-sx={{ cursor: 'pointer', display: 'inline-block' }}
->
-<img
-src={supplierInvoiceUrl[supplier]}
-alt={`Invoice for ${supplier}`}
-style={{ maxHeight: 80, width: 'auto' }}
-/>
-<Typography variant="body2" color="primary">
-Click to replace invoice
-</Typography>
-</Box>
-) : (
-<Typography
-variant="body2"
-color="primary"
-sx={{ textDecoration: 'underline', cursor: 'pointer' }}
-onClick={() => {
-document.getElementById(`invoice-input-${supplier}`).click();
-}}
->
-Click to upload invoice
-</Typography>
-)}
-<input
-id={`invoice-input-${supplier}`}
-type="file"
-style={{ display: 'none' }}
-accept="image/*"
-onChange={(e) => {
-if (e.target.files?.[0]) {
-handleInvoiceFileChangeAndUpload(supplier, e.target.files[0]);
-e.target.value = null;
-}
-}}
-/>
-</Box>
-{/* Aggregated table for items */}
+{/* Aggregated Items */}
 <Box
 sx={{
-display: 'flex',
-alignItems: 'center',
-gap: 2,
-mb: 1,
-fontWeight: 'bold',
-borderBottom: '1px solid #ccc',
-pb: 1
+mt: 4,
+border: '1px solid #ccc',
+p: 2,
+borderRadius: 1,
+width: '100%'
 }}
 >
-<Typography sx={{ flex: 1 }}>ID - Name</Typography>
-<Typography sx={{ flex: 1 }}>Qty</Typography>
-<Typography>Coll.</Typography>
-<Typography sx={{ width: '80px', textAlign: 'center' }}>
-Collected
-</Typography>
-<Typography sx={{ width: '80px', textAlign: 'center' }}>
-New Price
-</Typography>
-<Typography sx={{ width: '80px', textAlign: 'right' }}>
-Orig
+<Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+<Typography variant="h5" sx={{ ml: 2 }}>
+Bons de commandes aux fournisseurs - Week {currentWeek}
 </Typography>
 </Box>
-{itemsArray.map(item => (
-<Box
-key={item.id}
-sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}
->
-<Typography sx={{ flex: 1 }}>
-{`ID: ${item.id} - ${item.name}`}
-</Typography>
-<Typography sx={{ width: '60px', textAlign: 'right' }}>
-{item.quantity}
-</Typography>
-<FormControlLabel
-control={
-<Checkbox
-checked={checklist[item.id]?.collected || false}
-onChange={() => toggleCollected(item.id)}
+<AggregatedTable
+aggregatedBySupplier={aggregatedBySupplier}
+supplierInvoiceUrl={supplierInvoiceUrlState}
+currentWeek={currentWeek}
+checklist={checklist}
+toggleCollected={toggleCollected}
+updateChecklistField={updateChecklistField}
+handleInvoiceFileChangeAndUpload={handleInvoiceFileChangeAndUpload}
+handleOpenReplaceDialog={handleOpenReplaceDialog}
 />
-}
-label=""
-sx={{ mr: 0 }}
-/>
-<TextField
-label="Collected"
-type="number"
-size="small"
-value={
-checklist[item.id]?.collectedQuantity !== undefined
-? checklist[item.id].collectedQuantity
-: ''
-}
-onChange={(e) =>
-updateChecklistField(item.id, 'collectedQuantity', e.target.value)
-}
-sx={{ width: '80px', textAlign: 'right' }}
-inputProps={{
-min: 0,
-style: { textAlign: 'right' },
-inputMode: 'numeric',
-pattern: '[0-9]*'
-}}
-/>
-<TextField
-label="New Price"
-type="number"
-size="small"
-value={
-checklist[item.id]?.newPrice !== undefined
-? checklist[item.id].newPrice
-: ''
-}
-onChange={(e) =>
-updateChecklistField(item.id, 'newPrice', e.target.value)
-}
-sx={{ width: '100px', textAlign: 'right' }}
-inputProps={{
-min: 0,
-style: { textAlign: 'right' },
-inputMode: 'numeric',
-pattern: '[0-9]*'
-}}
-/>
-<Typography sx={{ width: '80px', textAlign: 'right' }}>
-${parseFloat(item.price).toFixed(2)}
-</Typography>
-{/* NEW: Replace button */}
-<Button
-variant="outlined"
-size="small"
-onClick={() => handleOpenReplaceDialog(item.id)}
->
-Replace
-</Button>
-</Box>
-))}
-</Paper>
-);
-})
-)}
 </Box>
 <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
 Deliveries
 </Typography>
 {/* ACTIVE ORDERS */}
-{activeOrders.length === 0 ? (
+{sortedActiveOrders.length === 0 ? (
 <Typography>No active orders for this week.</Typography>
 ) : (
-activeOrders.map(order => (
+sortedActiveOrders.map(order => (
 <OrderCard
 key={order.id}
 order={order}
@@ -1469,55 +1769,24 @@ onAddProduct={handleOpenAddProduct}
 ))
 )}
 {/* DELIVERED ORDERS */}
-{deliveredOrders.length > 0 && (
+{sortedDeliveredOrders.length > 0 && (
 <>
 <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
 Delivered Orders
 </Typography>
-{deliveredOrders.map(order => (
+{sortedDeliveredOrders.map(order => (
 <DeliveredOrderCard key={order.id} order={order} />
 ))}
 </>
 )}
-{/* Signature Pad Overlay */}
-{sigPadOpen && (
-<Box
-sx={{
-position: 'fixed',
-top: 0,
-left: 0,
-right: 0,
-bottom: 0,
-backgroundColor: 'rgba(0,0,0,0.5)',
-display: 'flex',
-justifyContent: 'center',
-alignItems: 'center'
-}}
->
-<Box sx={{ backgroundColor: '#fff', p: 2, borderRadius: 2 }}>
-<Typography variant="h6" gutterBottom>
-Signature
-</Typography>
-<SignatureCanvas
-ref={sigPadRef}
-penColor="black"
-canvasProps={{ width: 400, height: 200, className: 'sigCanvas' }}
-backgroundColor="#eee"
+{/* Signature Overlay */}
+<SignatureOverlay
+open={!!sigPadOpen}
+sigPadRef={sigPadRef}
+onClear={clearSignature}
+onSave={saveSignature}
+onCancel={() => setSigPadOpen(null)}
 />
-<Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
-<Button variant="outlined" onClick={clearSignature}>
-Clear
-</Button>
-<Button variant="contained" onClick={saveSignature}>
-Save Signature
-</Button>
-<Button variant="text" onClick={() => setSigPadOpen(null)}>
-Cancel
-</Button>
-</Box>
-</Box>
-</Box>
-)}
 {/* Existing "Add Product" Dialog */}
 <AddProductDialog
 open={addProductDialogOpen}
@@ -1527,7 +1796,7 @@ handleAddProductToOrder(selectedOrderForProductAddition, product);
 handleCloseAddProduct();
 }}
 />
-{/* NEW "Replace Product" Dialog (step 1: pick product) */}
+{/* Step 1: Replace Product -> pick new product */}
 <AddProductDialog
 open={replaceDialogOpen}
 onClose={handleCloseReplaceDialog}
@@ -1535,13 +1804,22 @@ onProductSelect={(product) => {
 handleStartReplaceConfirmation(product);
 }}
 />
-{/* Confirmation Dialog (step 2: confirm) */}
+{/* Step 2: Show orders that have oldProductId, user picks which ones to replace */}
+<ReplaceOrdersSelectionDialog
+open={replaceOrdersSelectionOpen}
+ordersForReplacement={ordersForReplacement}
+selectedOrders={selectedOrdersForReplacement}
+setSelectedOrders={setSelectedOrdersForReplacement}
+onClose={handleCloseReplaceOrdersSelection}
+onNext={handleNextFromReplaceOrdersSelection}
+/>
+{/* Step 3: final confirm */}
 <Dialog open={replaceConfirmOpen} onClose={handleCancelReplace}>
 <DialogTitle>Confirm Product Replacement</DialogTitle>
 <DialogContent>
 <Typography>
 You are about to replace product <strong>{oldProductIdToReplace}</strong> in{' '}
-<strong>{ordersAffectedCount}</strong> order(s). Continue?
+<strong>{ordersAffectedCount}</strong> selected order(s). Continue?
 </Typography>
 </DialogContent>
 <DialogActions>
@@ -1556,7 +1834,6 @@ Confirm
 </Box>
 );
 }
-export default DeliveryDashboard;
 
 
 
@@ -1745,7 +2022,13 @@ Box,
 TextField,
 Button
 } from '@mui/material';
-export default function OrderCard({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChange, onAddProduct }) {
+export default function OrderCard({
+order,
+onMarkDelivered,
+onOpenSignaturePad,
+onQuantityChange,
+onAddProduct
+}) {
 const [address, setAddress] = useState(null);
 const [companyName, setCompanyName] = useState('');
 useEffect(() => {
@@ -1789,28 +2072,37 @@ Delivery Status: {order.deliveryStatus || 'N/A'}
 <Box sx={{ mt: 2 }}>
 {order.items?.map((item) => (
 <Box key={item.id} sx={{ mb: 1 }}>
-<Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+<Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+{/* Item name */}
 <Typography sx={{ flex: 1 }}>{item.name}</Typography>
+{/* Supplier */}
 <Typography sx={{ flex: 1 }}>
 {item.supplier || 'N/A'}
 </Typography>
+{/* Price (not editable, just displayed) */}
 <Typography sx={{ width: '80px', textAlign: 'right' }}>
 ${parseFloat(item.price).toFixed(2)}
 </Typography>
+{/* Quantity field: numeric-friendly for mobile */}
 <TextField
 type="number"
 size="small"
 value={item.quantity}
 onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
-sx={{ width: '60px', textAlign: 'right' }}
+sx={{
+// A bit narrower on small screens:
+width: { xs: '50px', sm: '60px' },
+textAlign: 'right'
+}}
 inputProps={{
 style: { textAlign: 'right' },
 min: 0,
-inputMode: 'numeric',
-pattern: '[0-9]*'
+inputMode: 'numeric',    // helps mobile show numeric keyboard
+pattern: '[0-9]*'       // restricts to digits
 }}
 />
 </Box>
+{/* Optional comment */}
 {item.comment && (
 <Typography variant="body2" sx={{ ml: 2, color: 'grey.600' }}>
 Comment: {item.comment}
@@ -1819,7 +2111,7 @@ Comment: {item.comment}
 </Box>
 ))}
 </Box>
-<Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+<Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
 <Button
 variant="contained"
 onClick={() => onMarkDelivered(order.id)}
@@ -1830,6 +2122,7 @@ Mark Delivered
 <Button variant="contained" onClick={() => onAddProduct(order.id)}>
 Ajouter un produit
 </Button>
+{/* If there's a signature, show it; otherwise show the capture button */}
 {order.signature ? (
 <Box
 sx={{
@@ -1983,6 +2276,7 @@ export default Basket;
 
 
 # ** File: src/components/ProductsPage.js **
+// src/components/ProductsPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
 collection,
@@ -1996,50 +2290,45 @@ where,
 serverTimestamp,
 } from 'firebase/firestore';
 import { firestore } from '../firebase';
-import Basket from './Basket';
-import VirtualizedProductsTable from './VirtualizedProductsTable';
 import { Link } from 'react-router-dom';
 import {
 Container,
 Typography,
 Button,
-TextField,
-Box,
-FormControl,
-InputLabel,
-Select,
-MenuItem,
-FormControlLabel,
-Checkbox,
+Box
 } from '@mui/material';
 import Logo from '../logo.svg';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
+// Import our FilterBar and ResponsiveProductsView:
+import FilterBar from './FilterBar';
+import ResponsiveProductsView from './ResponsiveProductsView';
+import Basket from './Basket';
+import { getWeekCode } from '../utils/dateUtils';
 function ProductsPage({ user, isDelivery }) {
+// --- State for products, basket, user address, etc.
 const [products, setProducts] = useState([]);
 const [basket, setBasket] = useState([]);
 const [userAddress, setUserAddress] = useState('');
 const [activeOrderId, setActiveOrderId] = useState(null);
+// --- Filter states
 const [searchTerm, setSearchTerm] = useState('');
 const [selectedCategory, setSelectedCategory] = useState('');
 const [selectedSupplier, setSelectedSupplier] = useState('');
 const [bioOnly, setBioOnly] = useState(false);
+// For auto-saving
 const lastRemoteBasketRef = useRef([]);
+// For restricting orders to certain days
 const today = new Date();
-const allowedDays = [1, 2, 3];
+const allowedDays = [1, 2, 3]; // Monday, Tuesday, Wednesday
+// or set by environment
 const bypassOrderRestrictions = process.env.REACT_APP_BYPASS_ORDER_RESTRICTION === 'true';
 const isOrderAllowed = bypassOrderRestrictions || allowedDays.includes(today.getDay());
-function getWeekCode(date) {
-const target = new Date(date.valueOf());
-const dayNr = (target.getDay() + 6) % 7;
-target.setDate(target.getDate() - dayNr + 3);
-const firstThursday = new Date(target.getFullYear(), 0, 4);
-const diff = target - firstThursday;
-const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
-return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
-}
+// Current week code
 const currentWeek = getWeekCode(today);
-// Retrieve user's address from res_partner
+// ------------------------------------------------------------------
+//  1) Retrieve user's address from "res_partner"
+// ------------------------------------------------------------------
 useEffect(() => {
 if (user && user.email) {
 const fetchAddress = async () => {
@@ -2052,23 +2341,27 @@ const partnerData = querySnapshot.docs[0].data();
 setUserAddress(partnerData.contact_address_complete || '');
 }
 } catch (error) {
-console.error("Erreur lors de la récupération de l'adresse depuis res_partner", error);
+console.error("Error retrieving address from res_partner:", error);
 }
 };
 fetchAddress();
 }
 }, [user]);
-// Retrieve all products
+// ------------------------------------------------------------------
+//  2) Retrieve all products (available == true)
+// ------------------------------------------------------------------
 useEffect(() => {
 const productsRef = collection(firestore, 'products');
-const q = query(productsRef, where("available", "==", true));
-const unsubscribe = onSnapshot(q, snapshot => {
+const q = query(productsRef, where('available', '==', true));
+const unsubscribe = onSnapshot(q, (snapshot) => {
 const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 setProducts(prods);
 });
 return () => unsubscribe();
 }, []);
-// Load an open order
+// ------------------------------------------------------------------
+//  3) Load an "open" order for the user (status == 'open')
+// ------------------------------------------------------------------
 useEffect(() => {
 const ordersRef = collection(firestore, 'orders');
 const qOrders = query(
@@ -2076,8 +2369,9 @@ ordersRef,
 where('userId', '==', user.uid),
 where('status', '==', 'open')
 );
-const unsubscribe = onSnapshot(qOrders, snapshot => {
+const unsubscribe = onSnapshot(qOrders, (snapshot) => {
 if (!snapshot.empty) {
+// pick the most recently updated open order
 const openOrders = snapshot.docs.sort((a, b) => {
 const aTime = a.data().updatedAt ? a.data().updatedAt.seconds : 0;
 const bTime = b.data().updatedAt ? b.data().updatedAt.seconds : 0;
@@ -2087,27 +2381,31 @@ const activeOrder = openOrders[0];
 const data = activeOrder.data();
 setActiveOrderId(activeOrder.id);
 const remoteItems = data.items || [];
+// If remote items differ from local basket, sync them
 if (JSON.stringify(remoteItems) !== JSON.stringify(basket)) {
 setBasket(remoteItems);
 }
 lastRemoteBasketRef.current = remoteItems;
-console.log(`[ProductsPage] Chargement de la commande active ${activeOrder.id} avec le panier :`, remoteItems);
 } else {
+// no open orders, so no basket
 setActiveOrderId(null);
 setBasket([]);
 lastRemoteBasketRef.current = [];
 }
 });
 return () => unsubscribe();
-}, [user.uid]);
-// Basket modifications
+}, [user.uid, basket]);
+// ------------------------------------------------------------------
+//  Basket modifications
+// ------------------------------------------------------------------
 const addToBasket = (product, quantity) => {
-console.log(`[ProductsPage] addToBasket: productId=${product.id}, quantity=${quantity}`);
 setBasket(prev => {
 const existing = prev.find(item => item.id === product.id);
 if (existing) {
 return prev.map(item =>
-item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+item.id === product.id
+? { ...item, quantity: item.quantity + quantity }
+: item
 );
 } else {
 return [...prev, { ...product, quantity }];
@@ -2115,7 +2413,6 @@ return [...prev, { ...product, quantity }];
 });
 };
 const updateBasketItem = (id, newQuantity) => {
-console.log(`[ProductsPage] updateBasketItem: id=${id}, newQuantity=${newQuantity}`);
 setBasket(prev =>
 prev.map(item => (item.id === id ? { ...item, quantity: newQuantity } : item))
 );
@@ -2125,11 +2422,12 @@ setBasket(prev =>
 prev.map(item => (item.id === id ? { ...item, comment } : item))
 );
 };
-const removeBasketItem = id => {
-console.log(`[ProductsPage] removeBasketItem: id=${id}`);
+const removeBasketItem = (id) => {
 setBasket(prev => prev.filter(item => item.id !== id));
 };
-// Manual order saving
+// ------------------------------------------------------------------
+//  Manual order saving
+// ------------------------------------------------------------------
 const saveOrder = async () => {
 if (basket.length === 0) {
 alert("Le panier est vide !");
@@ -2151,23 +2449,24 @@ createdAt: serverTimestamp(),
 try {
 if (activeOrderId) {
 await updateDoc(doc(firestore, 'orders', activeOrderId), orderData);
-console.log(`[ProductsPage] saveOrder: Commande ${activeOrderId} mise à jour avec succès`);
 alert('Commande mise à jour !');
 } else {
 const docRef = await addDoc(collection(firestore, 'orders'), orderData);
 setActiveOrderId(docRef.id);
-console.log(`[ProductsPage] saveOrder: Commande ${docRef.id} créée avec succès`);
 alert('Commande créée et enregistrée !');
 }
 } catch (error) {
-console.error('[ProductsPage] saveOrder: Erreur lors de l\'enregistrement de la commande', error);
+console.error('Error saving order:', error);
 alert('Erreur lors de l\'enregistrement de la commande');
 }
 };
-// Auto-save effect
+// ------------------------------------------------------------------
+//  Auto-save effect
+// ------------------------------------------------------------------
 useEffect(() => {
 const timeoutId = setTimeout(() => {
 if (!activeOrderId && basket.length > 0) {
+// Create new order when there is no active order and basket is non-empty
 const orderData = {
 userId: user.uid,
 email: user.email,
@@ -2181,33 +2480,34 @@ addDoc(collection(firestore, 'orders'), orderData)
 .then(docRef => {
 setActiveOrderId(docRef.id);
 lastRemoteBasketRef.current = basket;
-console.log(`[ProductsPage] Auto-création de la commande ${docRef.id}`);
 })
 .catch(error => {
-console.error(`[ProductsPage] Erreur lors de la création automatique de la commande`, error);
+console.error('Error auto-creating order', error);
 });
-} else if (activeOrderId && basket.length > 0) {
+} else if (activeOrderId) {
+// If we do have an active order, only update if basket changed
 if (JSON.stringify(basket) !== JSON.stringify(lastRemoteBasketRef.current)) {
 updateDoc(doc(firestore, 'orders', activeOrderId), {
 items: basket,
 updatedAt: serverTimestamp(),
 })
 .then(() => {
-console.log(`[ProductsPage] Panier mis à jour pour la commande ${activeOrderId}`);
 lastRemoteBasketRef.current = basket;
 })
-.catch((error) => {
-console.error(`[ProductsPage] Erreur lors de la mise à jour de la commande ${activeOrderId}`, error);
+.catch(error => {
+console.error(`Error updating order ${activeOrderId}`, error);
 });
 }
 }
 }, 500);
 return () => clearTimeout(timeoutId);
 }, [basket, activeOrderId, user.uid]);
-// Extract distinct categories and suppliers from products
+// ------------------------------------------------------------------
+//  Filter logic
+// ------------------------------------------------------------------
 const distinctCategories = Array.from(new Set(products.map(p => p.category))).sort();
 const distinctSuppliers = Array.from(new Set(products.map(p => p.supplier))).sort();
-// Filter products based on search, category, supplier, and bio-only filter
+// Filter products based on the states
 const filteredProducts = products.filter(product => {
 const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
 const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
@@ -2215,12 +2515,13 @@ const matchesSupplier = selectedSupplier ? product.supplier === selectedSupplier
 const matchesBio = bioOnly ? product.bio === true : true;
 return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
 });
-// Sort products alphabetically by name
-const sortedFilteredProducts = [...filteredProducts].sort((a, b) => a.name.localeCompare(b.name));
-console.log(
-`[ProductsPage] render: searchTerm="${searchTerm}", selectedCategory="${selectedCategory}", selectedSupplier="${selectedSupplier}", bioOnly=${bioOnly}, totalProducts=${products.length}, filteredProducts=${filteredProducts.length}`
+// Sort them alphabetically by name
+const sortedFilteredProducts = [...filteredProducts].sort((a, b) =>
+a.name.localeCompare(b.name)
 );
-// Logout handler
+// ------------------------------------------------------------------
+//  Logout handler
+// ------------------------------------------------------------------
 const handleLogout = async () => {
 try {
 await signOut(auth);
@@ -2228,8 +2529,12 @@ await signOut(auth);
 console.error("Error signing out:", error);
 }
 };
+// ------------------------------------------------------------------
+//  Render
+// ------------------------------------------------------------------
 return (
 <Container sx={{ pt: 4, pb: 10 }}>
+{/* Header / Logo / Buttons */}
 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
 <Box>
 <img src={Logo} alt="Logo" style={{ height: '40px', marginBottom: '10px' }} />
@@ -2264,67 +2569,27 @@ Semaine: {currentWeek}
 )}
 </Box>
 </Box>
-<Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', px: 0 }}>
-<Box sx={{ py: 3, borderBottom: '1px solid #DDD' }}>
-<Typography variant="h4" sx={{ fontWeight: 'bold', mb: 2 }}>
-Produits
-</Typography>
-<Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-<TextField
-label="Rechercher"
-variant="outlined"
-fullWidth
-value={searchTerm}
-onChange={(e) => setSearchTerm(e.target.value)}
+{/* Filter Bar (with mobile dialog) */}
+<FilterBar
+searchTerm={searchTerm}
+setSearchTerm={setSearchTerm}
+selectedCategory={selectedCategory}
+setSelectedCategory={setSelectedCategory}
+selectedSupplier={selectedSupplier}
+setSelectedSupplier={setSelectedSupplier}
+bioOnly={bioOnly}
+setBioOnly={setBioOnly}
+distinctCategories={distinctCategories}
+distinctSuppliers={distinctSuppliers}
 />
-<FormControl sx={{ minWidth: 200 }}>
-<InputLabel>Catégorie</InputLabel>
-<Select
-value={selectedCategory}
-onChange={(e) => setSelectedCategory(e.target.value)}
-label="Catégorie"
->
-<MenuItem value="">Toutes</MenuItem>
-{distinctCategories.map((cat) => (
-<MenuItem key={cat} value={cat}>
-{cat}
-</MenuItem>
-))}
-</Select>
-</FormControl>
-<FormControl sx={{ minWidth: 200 }}>
-<InputLabel>Fournisseur</InputLabel>
-<Select
-value={selectedSupplier}
-onChange={(e) => setSelectedSupplier(e.target.value)}
-label="Fournisseur"
->
-<MenuItem value="">Tous</MenuItem>
-{distinctSuppliers.map((sup) => (
-<MenuItem key={sup} value={sup}>
-{sup}
-</MenuItem>
-))}
-</Select>
-</FormControl>
-<FormControlLabel
-control={<Checkbox checked={bioOnly} onChange={(e) => setBioOnly(e.target.checked)} />}
-label="Bio seulement"
-/>
-</Box>
-</Box>
+{/* Product list/table (responsive) */}
 <Box className="table-container">
-<VirtualizedProductsTable products={sortedFilteredProducts} addToBasket={addToBasket} />
-</Box>
-<Basket
-basket={basket}
-updateBasketItem={updateBasketItem}
-updateBasketItemComment={updateBasketItemComment}
-removeBasketItem={removeBasketItem}
-saveOrder={saveOrder}
-isOrderAllowed={isOrderAllowed}
+<ResponsiveProductsView
+products={sortedFilteredProducts}
+addToBasket={addToBasket}
 />
 </Box>
+{/* Basket (at bottom) */}
 <Basket
 basket={basket}
 updateBasketItem={updateBasketItem}
@@ -2337,4 +2602,82 @@ isOrderAllowed={isOrderAllowed}
 );
 }
 export default ProductsPage;
+
+
+
+# ** File: src/hooks/useDeliveryAggregation.js **
+// src/hooks/useDeliveryAggregation.js
+import { useEffect, useState } from 'react';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
+import { firestore } from '../firebase';
+import { getWeekCode } from '../utils/dateUtils';
+/**
+* A custom hook that fetches and aggregates orders, plus checks for supplier invoices.
+* Returns { orders, aggregatedBySupplier, supplierInvoiceUrl, reloadInvoices }
+*/
+export function useDeliveryAggregation() {
+const [orders, setOrders] = useState([]);
+const [aggregatedBySupplier, setAggregatedBySupplier] = useState({});
+const [supplierInvoiceUrl, setSupplierInvoiceUrl] = useState({});
+const currentWeek = getWeekCode(new Date());
+// 1) Fetch orders for current week
+useEffect(() => {
+const wc = getWeekCode(new Date());
+const ordersRef = collection(firestore, 'orders');
+const qOrders = query(ordersRef, where('weekCode', '==', wc));
+const unsub = onSnapshot(qOrders, (snapshot) => {
+const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+setOrders(data);
+});
+return () => unsub();
+}, []);
+// 2) Recompute aggregatedBySupplier whenever orders changes
+useEffect(() => {
+const newAggregated = {};
+orders.forEach(order => {
+if (order.items) {
+order.items.forEach(item => {
+const supplier = item.supplier || 'Unknown';
+if (!newAggregated[supplier]) {
+newAggregated[supplier] = {};
+}
+if (!newAggregated[supplier][item.id]) {
+newAggregated[supplier][item.id] = { ...item };
+} else {
+newAggregated[supplier][item.id].quantity += item.quantity;
+}
+});
+}
+});
+setAggregatedBySupplier(newAggregated);
+}, [orders]);
+// 3) Check if there's an uploaded invoice in Firestore for each supplier
+//    Provide a function so we can reload if needed
+async function reloadInvoices(aggregatedObj) {
+for (const supplier of Object.keys(aggregatedObj)) {
+const docId = `${currentWeek}_${supplier}`;
+const invoiceDocRef = doc(firestore, 'delivery_invoices', docId);
+const snapshot = await getDoc(invoiceDocRef);
+if (snapshot.exists()) {
+const data = snapshot.data();
+if (data.invoiceUrl) {
+setSupplierInvoiceUrl((prev) => ({
+...prev,
+[supplier]: data.invoiceUrl
+}));
+}
+}
+}
+}
+useEffect(() => {
+reloadInvoices(aggregatedBySupplier);
+// eslint-disable-next-line react-hooks/exhaustive-deps
+}, [aggregatedBySupplier]);
+return {
+orders,
+aggregatedBySupplier,
+supplierInvoiceUrl,
+reloadInvoices,
+};
+}
 

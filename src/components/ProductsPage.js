@@ -1,3 +1,4 @@
+// src/components/ProductsPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   collection,
@@ -11,53 +12,55 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { firestore } from '../firebase';
-import Basket from './Basket';
-import VirtualizedProductsTable from './VirtualizedProductsTable';
+
 import { Link } from 'react-router-dom';
 import {
   Container,
   Typography,
   Button,
-  TextField,
-  Box,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  FormControlLabel,
-  Checkbox,
+  Box
 } from '@mui/material';
+
 import Logo from '../logo.svg';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
 
+// Import our FilterBar and ResponsiveProductsView:
+import FilterBar from './FilterBar';
+import ResponsiveProductsView from './ResponsiveProductsView';
+import Basket from './Basket';
+
+import { getWeekCode } from '../utils/dateUtils';
+
 function ProductsPage({ user, isDelivery }) {
+  // --- State for products, basket, user address, etc.
   const [products, setProducts] = useState([]);
   const [basket, setBasket] = useState([]);
   const [userAddress, setUserAddress] = useState('');
   const [activeOrderId, setActiveOrderId] = useState(null);
+
+  // --- Filter states
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [bioOnly, setBioOnly] = useState(false);
+
+  // For auto-saving
   const lastRemoteBasketRef = useRef([]);
+  
+  // For restricting orders to certain days
   const today = new Date();
-  const allowedDays = [1, 2, 3];
+  const allowedDays = [1, 2, 3]; // Monday, Tuesday, Wednesday
+  // or set by environment
   const bypassOrderRestrictions = process.env.REACT_APP_BYPASS_ORDER_RESTRICTION === 'true';
   const isOrderAllowed = bypassOrderRestrictions || allowedDays.includes(today.getDay());
-  
-  function getWeekCode(date) {
-    const target = new Date(date.valueOf());
-    const dayNr = (target.getDay() + 6) % 7;
-    target.setDate(target.getDate() - dayNr + 3);
-    const firstThursday = new Date(target.getFullYear(), 0, 4);
-    const diff = target - firstThursday;
-    const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
-    return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
-  }
+
+  // Current week code
   const currentWeek = getWeekCode(today);
 
-  // Retrieve user's address from res_partner
+  // ------------------------------------------------------------------
+  //  1) Retrieve user's address from "res_partner"
+  // ------------------------------------------------------------------
   useEffect(() => {
     if (user && user.email) {
       const fetchAddress = async () => {
@@ -70,25 +73,30 @@ function ProductsPage({ user, isDelivery }) {
             setUserAddress(partnerData.contact_address_complete || '');
           }
         } catch (error) {
-          console.error("Erreur lors de la récupération de l'adresse depuis res_partner", error);
+          console.error("Error retrieving address from res_partner:", error);
         }
       };
       fetchAddress();
     }
   }, [user]);
 
-  // Retrieve all products
+  // ------------------------------------------------------------------
+  //  2) Retrieve all products (available == true)
+  // ------------------------------------------------------------------
   useEffect(() => {
     const productsRef = collection(firestore, 'products');
-    const q = query(productsRef, where("available", "==", true));
-    const unsubscribe = onSnapshot(q, snapshot => {
+    const q = query(productsRef, where('available', '==', true));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
       const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setProducts(prods);
     });
     return () => unsubscribe();
   }, []);
 
-  // Load an open order
+  // ------------------------------------------------------------------
+  //  3) Load an "open" order for the user (status == 'open')
+  // ------------------------------------------------------------------
   useEffect(() => {
     const ordersRef = collection(firestore, 'orders');
     const qOrders = query(
@@ -96,8 +104,9 @@ function ProductsPage({ user, isDelivery }) {
       where('userId', '==', user.uid),
       where('status', '==', 'open')
     );
-    const unsubscribe = onSnapshot(qOrders, snapshot => {
+    const unsubscribe = onSnapshot(qOrders, (snapshot) => {
       if (!snapshot.empty) {
+        // pick the most recently updated open order
         const openOrders = snapshot.docs.sort((a, b) => {
           const aTime = a.data().updatedAt ? a.data().updatedAt.seconds : 0;
           const bTime = b.data().updatedAt ? b.data().updatedAt.seconds : 0;
@@ -106,13 +115,15 @@ function ProductsPage({ user, isDelivery }) {
         const activeOrder = openOrders[0];
         const data = activeOrder.data();
         setActiveOrderId(activeOrder.id);
+
         const remoteItems = data.items || [];
+        // If remote items differ from local basket, sync them
         if (JSON.stringify(remoteItems) !== JSON.stringify(basket)) {
           setBasket(remoteItems);
         }
         lastRemoteBasketRef.current = remoteItems;
-        console.log(`[ProductsPage] Chargement de la commande active ${activeOrder.id} avec le panier :`, remoteItems);
       } else {
+        // no open orders, so no basket
         setActiveOrderId(null);
         setBasket([]);
         lastRemoteBasketRef.current = [];
@@ -121,37 +132,43 @@ function ProductsPage({ user, isDelivery }) {
     return () => unsubscribe();
   }, [user.uid]);
 
-  // Basket modifications
+  // ------------------------------------------------------------------
+  //  Basket modifications
+  // ------------------------------------------------------------------
   const addToBasket = (product, quantity) => {
-    console.log(`[ProductsPage] addToBasket: productId=${product.id}, quantity=${quantity}`);
     setBasket(prev => {
       const existing = prev.find(item => item.id === product.id);
       if (existing) {
         return prev.map(item =>
-          item.id === product.id ? { ...item, quantity: item.quantity + quantity } : item
+          item.id === product.id
+            ? { ...item, quantity: item.quantity + quantity }
+            : item
         );
       } else {
         return [...prev, { ...product, quantity }];
       }
     });
   };
+
   const updateBasketItem = (id, newQuantity) => {
-    console.log(`[ProductsPage] updateBasketItem: id=${id}, newQuantity=${newQuantity}`);
     setBasket(prev =>
       prev.map(item => (item.id === id ? { ...item, quantity: newQuantity } : item))
     );
   };
+
   const updateBasketItemComment = (id, comment) => {
     setBasket(prev =>
       prev.map(item => (item.id === id ? { ...item, comment } : item))
     );
   };
-  const removeBasketItem = id => {
-    console.log(`[ProductsPage] removeBasketItem: id=${id}`);
+
+  const removeBasketItem = (id) => {
     setBasket(prev => prev.filter(item => item.id !== id));
   };
 
-  // Manual order saving
+  // ------------------------------------------------------------------
+  //  Manual order saving
+  // ------------------------------------------------------------------
   const saveOrder = async () => {
     if (basket.length === 0) {
       alert("Le panier est vide !");
@@ -173,24 +190,25 @@ function ProductsPage({ user, isDelivery }) {
     try {
       if (activeOrderId) {
         await updateDoc(doc(firestore, 'orders', activeOrderId), orderData);
-        console.log(`[ProductsPage] saveOrder: Commande ${activeOrderId} mise à jour avec succès`);
         alert('Commande mise à jour !');
       } else {
         const docRef = await addDoc(collection(firestore, 'orders'), orderData);
         setActiveOrderId(docRef.id);
-        console.log(`[ProductsPage] saveOrder: Commande ${docRef.id} créée avec succès`);
         alert('Commande créée et enregistrée !');
       }
     } catch (error) {
-      console.error('[ProductsPage] saveOrder: Erreur lors de l\'enregistrement de la commande', error);
+      console.error('Error saving order:', error);
       alert('Erreur lors de l\'enregistrement de la commande');
     }
   };
 
-  // Auto-save effect
+  // ------------------------------------------------------------------
+  //  Auto-save effect
+  // ------------------------------------------------------------------
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (!activeOrderId && basket.length > 0) {
+        // Create new order when there is no active order and basket is non-empty
         const orderData = {
           userId: user.uid,
           email: user.email,
@@ -204,23 +222,22 @@ function ProductsPage({ user, isDelivery }) {
           .then(docRef => {
             setActiveOrderId(docRef.id);
             lastRemoteBasketRef.current = basket;
-            console.log(`[ProductsPage] Auto-création de la commande ${docRef.id}`);
           })
           .catch(error => {
-            console.error(`[ProductsPage] Erreur lors de la création automatique de la commande`, error);
+            console.error('Error auto-creating order', error);
           });
-      } else if (activeOrderId && basket.length > 0) {
+      } else if (activeOrderId) {
+        // If we do have an active order, only update if basket changed
         if (JSON.stringify(basket) !== JSON.stringify(lastRemoteBasketRef.current)) {
           updateDoc(doc(firestore, 'orders', activeOrderId), {
             items: basket,
             updatedAt: serverTimestamp(),
           })
             .then(() => {
-              console.log(`[ProductsPage] Panier mis à jour pour la commande ${activeOrderId}`);
               lastRemoteBasketRef.current = basket;
             })
-            .catch((error) => {
-              console.error(`[ProductsPage] Erreur lors de la mise à jour de la commande ${activeOrderId}`, error);
+            .catch(error => {
+              console.error(`Error updating order ${activeOrderId}`, error);
             });
         }
       }
@@ -228,11 +245,13 @@ function ProductsPage({ user, isDelivery }) {
     return () => clearTimeout(timeoutId);
   }, [basket, activeOrderId, user.uid]);
 
-  // Extract distinct categories and suppliers from products
+  // ------------------------------------------------------------------
+  //  Filter logic
+  // ------------------------------------------------------------------
   const distinctCategories = Array.from(new Set(products.map(p => p.category))).sort();
   const distinctSuppliers = Array.from(new Set(products.map(p => p.supplier))).sort();
 
-  // Filter products based on search, category, supplier, and bio-only filter
+  // Filter products based on the states
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
@@ -241,14 +260,14 @@ function ProductsPage({ user, isDelivery }) {
     return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
   });
 
-  // Sort products alphabetically by name
-  const sortedFilteredProducts = [...filteredProducts].sort((a, b) => a.name.localeCompare(b.name));
-
-  console.log(
-    `[ProductsPage] render: searchTerm="${searchTerm}", selectedCategory="${selectedCategory}", selectedSupplier="${selectedSupplier}", bioOnly=${bioOnly}, totalProducts=${products.length}, filteredProducts=${filteredProducts.length}`
+  // Sort them alphabetically by name
+  const sortedFilteredProducts = [...filteredProducts].sort((a, b) =>
+    a.name.localeCompare(b.name)
   );
 
-  // Logout handler
+  // ------------------------------------------------------------------
+  //  Logout handler
+  // ------------------------------------------------------------------
   const handleLogout = async () => {
     try {
       await signOut(auth);
@@ -257,8 +276,12 @@ function ProductsPage({ user, isDelivery }) {
     }
   };
 
+  // ------------------------------------------------------------------
+  //  Render
+  // ------------------------------------------------------------------
   return (
     <Container sx={{ pt: 4, pb: 10 }}>
+      {/* Header / Logo / Buttons */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box>
           <img src={Logo} alt="Logo" style={{ height: '40px', marginBottom: '10px' }} />
@@ -267,6 +290,7 @@ function ProductsPage({ user, isDelivery }) {
             Voir l'historique des commandes
           </Button>
         </Box>
+
         <Box sx={{ textAlign: 'right' }}>
           {user && (
             <>
@@ -293,67 +317,30 @@ function ProductsPage({ user, isDelivery }) {
           )}
         </Box>
       </Box>
-      <Box sx={{ display: 'flex', flexDirection: 'column', height: '100vh', px: 0 }}>
-        <Box sx={{ py: 3, borderBottom: '1px solid #DDD' }}>
-          <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 2 }}>
-            Produits
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <TextField
-              label="Rechercher"
-              variant="outlined"
-              fullWidth
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel>Catégorie</InputLabel>
-              <Select
-                value={selectedCategory}
-                onChange={(e) => setSelectedCategory(e.target.value)}
-                label="Catégorie"
-              >
-                <MenuItem value="">Toutes</MenuItem>
-                {distinctCategories.map((cat) => (
-                  <MenuItem key={cat} value={cat}>
-                    {cat}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControl sx={{ minWidth: 200 }}>
-              <InputLabel>Fournisseur</InputLabel>
-              <Select
-                value={selectedSupplier}
-                onChange={(e) => setSelectedSupplier(e.target.value)}
-                label="Fournisseur"
-              >
-                <MenuItem value="">Tous</MenuItem>
-                {distinctSuppliers.map((sup) => (
-                  <MenuItem key={sup} value={sup}>
-                    {sup}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <FormControlLabel
-              control={<Checkbox checked={bioOnly} onChange={(e) => setBioOnly(e.target.checked)} />}
-              label="Bio seulement"
-            />
-          </Box>
-        </Box>
-        <Box className="table-container">
-          <VirtualizedProductsTable products={sortedFilteredProducts} addToBasket={addToBasket} />
-        </Box>
-        <Basket
-          basket={basket}
-          updateBasketItem={updateBasketItem}
-          updateBasketItemComment={updateBasketItemComment}
-          removeBasketItem={removeBasketItem}
-          saveOrder={saveOrder}
-          isOrderAllowed={isOrderAllowed}
+
+      {/* Filter Bar (with mobile dialog) */}
+      <FilterBar
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        selectedCategory={selectedCategory}
+        setSelectedCategory={setSelectedCategory}
+        selectedSupplier={selectedSupplier}
+        setSelectedSupplier={setSelectedSupplier}
+        bioOnly={bioOnly}
+        setBioOnly={setBioOnly}
+        distinctCategories={distinctCategories}
+        distinctSuppliers={distinctSuppliers}
+      />
+
+      {/* Product list/table (responsive) */}
+      <Box className="table-container">
+        <ResponsiveProductsView
+          products={sortedFilteredProducts}
+          addToBasket={addToBasket}
         />
       </Box>
+
+      {/* Basket (at bottom) */}
       <Basket
         basket={basket}
         updateBasketItem={updateBasketItem}

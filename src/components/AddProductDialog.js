@@ -12,7 +12,11 @@ import {
   ListItem,
   ListItemText,
   Button,
-  Box
+  Box,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem
 } from '@mui/material';
 
 export default function AddProductDialog({ open, onClose, onProductSelect }) {
@@ -20,8 +24,14 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
   const [mode, setMode] = useState('select');
   const [searchTerm, setSearchTerm] = useState('');
   const [products, setProducts] = useState([]);
+
   // State for manual product form
-  const [newProduct, setNewProduct] = useState({ name: '', code: '', price: '' });
+  const [newProduct, setNewProduct] = useState({
+    name: '',
+    code: '',
+    price: '',
+    supplier: '' // <--- New field for supplier
+  });
   const [loading, setLoading] = useState(false);
 
   // Fetch available products
@@ -55,17 +65,20 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
       // Prepare new product data; tag it as manually added
       const newProdData = {
         ...newProduct,
-        price: parseFloat(newProduct.price),
+        price: parseFloat(newProduct.price) || 0,  // fallback to 0 if empty
         available: true,
         manuallyAdded: true
       };
+
       // Add the product to Firestore
       const docRef = await addDoc(collection(firestore, 'products'), newProdData);
       const createdProduct = { id: docRef.id, ...newProdData };
+
       // Pass the new product to the parent so it can be added to the order
       onProductSelect(createdProduct);
+
       // Reset the manual form and mode
-      setNewProduct({ name: '', code: '', price: '' });
+      setNewProduct({ name: '', code: '', price: '', supplier: '' });
       setMode('select');
     } catch (error) {
       console.error("Error adding new product", error);
@@ -118,6 +131,8 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
               onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
               required
             />
+
+            {/* Code is now NOT mandatory, so removed 'required' */}
             <TextField
               label="Code du produit"
               variant="outlined"
@@ -125,8 +140,8 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
               margin="normal"
               value={newProduct.code}
               onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
-              required
             />
+
             <TextField
               label="Prix"
               variant="outlined"
@@ -137,6 +152,22 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
               onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
               required
             />
+
+            {/* New dropdown for selecting a supplier */}
+            <FormControl fullWidth margin="normal">
+              <InputLabel>Fournisseur</InputLabel>
+              <Select
+                label="Fournisseur"
+                value={newProduct.supplier}
+                onChange={(e) => setNewProduct({ ...newProduct, supplier: e.target.value })}
+                required
+              >
+                {/* Example static items; replace with dynamic data if needed */}
+                <MenuItem value="Big Block">Big Block</MenuItem>
+                <MenuItem value="canadawide">canadawide</MenuItem>
+              </Select>
+            </FormControl>
+
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
               <Button onClick={() => setMode('select')} color="primary">
                 Retour
