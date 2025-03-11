@@ -83,7 +83,6 @@ function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierLabel) {
 const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChange }) => {
   const [address, setAddress] = useState(null);
   const [companyName, setCompanyName] = useState('');
-  const [partnerEmail, setPartnerEmail] = useState('');
 
   useEffect(() => {
     const fetchPartnerInfo = async () => {
@@ -95,7 +94,6 @@ const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChang
           const partnerData = querySnapshot.docs[0].data();
           setAddress(partnerData.contact_address_complete || '');
           setCompanyName(partnerData.company_name || '');
-          setPartnerEmail(partnerData.email || '');
         }
       } catch (error) {
         console.error('Error fetching partner info', error);
@@ -109,43 +107,50 @@ const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChang
       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
         Order ID: {order.id}
       </Typography>
-
       {/* Display partner info (company, email, address) */}
       {companyName && (
         <Typography variant="body2" sx={{ mb: 1 }}>
           Company: {companyName}
         </Typography>
       )}
-      {partnerEmail && (
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          Email: {partnerEmail}
-        </Typography>
-      )}
+      <Typography variant="body2" sx={{ mb: 1 }}>
+        Email: {order.email}
+      </Typography>
       {address && (
         <Typography variant="body2" sx={{ mb: 1 }}>
           Address: {address}
         </Typography>
       )}
-
       <Typography variant="body2">
         Delivery Status: {order.deliveryStatus || 'N/A'}
       </Typography>
-
       <Box sx={{ mt: 2 }}>
         {order.items?.map((item) => (
           <Box key={item.id} sx={{ mb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              {/* Item name */}
               <Typography sx={{ flex: 1 }}>{item.name}</Typography>
+              {/* New supplier column */}
+              <Typography sx={{ flex: 1 }}>
+                {item.supplier || 'N/A'}
+              </Typography>
+              {/* Price */}
               <Typography sx={{ width: '80px', textAlign: 'right' }}>
                 ${parseFloat(item.price).toFixed(2)}
               </Typography>
+              {/* Quantity */}
               <TextField
                 type="number"
                 size="small"
                 value={item.quantity}
                 onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
                 sx={{ width: '60px', textAlign: 'right' }}
-                inputProps={{ style: { textAlign: 'right' }, min: 0 }}
+                inputProps={{
+                  style: { textAlign: 'right' },
+                  min: 0,
+                  inputMode: 'numeric',
+                  pattern: '[0-9]*'
+                }}
               />
             </Box>
             {item.comment && (
@@ -156,7 +161,6 @@ const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChang
           </Box>
         ))}
       </Box>
-
       <Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
         <Button
           variant="contained"
@@ -335,7 +339,7 @@ function DeliveryDashboard({ user }) {
     if (!order) return;
     const updatedItems = order.items.map(item => {
       if (item.id === itemId) {
-        return { ...item, quantity: parseInt(newQty, 10) || 1 };
+        return { ...item, quantity: parseInt(newQty, 10) || 0 };
       }
       return item;
     });
@@ -364,11 +368,9 @@ function DeliveryDashboard({ user }) {
   const openSignaturePad = (orderId) => {
     setSigPadOpen(orderId);
   };
-
   const clearSignature = () => {
     sigPadRef.current?.clear();
   };
-
   const saveSignature = async () => {
     if (!sigPadRef.current) return;
     const orderId = sigPadOpen;
@@ -439,32 +441,24 @@ function DeliveryDashboard({ user }) {
         Orders for week: {currentWeek}
       </Typography>
 
-
-
       {/* Aggregated Items, grouped by supplier */}
-      <Box
-        ref={printRef}
-        sx={{ mt: 4, border: '1px solid #ccc', p: 2, borderRadius: 1 }}
-      >
+      <Box ref={printRef} sx={{ mt: 4, border: '1px solid #ccc', p: 2, borderRadius: 1 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <Typography variant="h5" sx={{ ml: 2 }}>
             Aggregated Lists - Week {currentWeek}
           </Typography>
         </Box>
-
         {Object.keys(aggregatedBySupplier).length === 0 ? (
           <Typography>No aggregated products.</Typography>
         ) : (
           Object.keys(aggregatedBySupplier).map((supplier) => {
             const itemsObj = aggregatedBySupplier[supplier];
             const itemsArray = Object.values(itemsObj);
-
             return (
               <Paper key={supplier} sx={{ mb: 2, p: 2 }}>
                 <Typography variant="h6" gutterBottom>
                   Supplier: {supplier}
                 </Typography>
-
                 <Button
                   variant="contained"
                   onClick={() => handleExportPDF(supplier)}
@@ -472,16 +466,13 @@ function DeliveryDashboard({ user }) {
                 >
                   Export PDF
                 </Button>
-
                 {/* Image upload area - auto-upload, small preview */}
                 <Box sx={{ mb: 2 }}>
                   {supplierInvoiceUrl[supplier] ? (
                     // If there's already an uploaded invoice, show a small preview
                     <Box
                       onClick={() => {
-                        document
-                          .getElementById(`invoice-input-${supplier}`)
-                          .click();
+                        document.getElementById(`invoice-input-${supplier}`).click();
                       }}
                       sx={{ cursor: 'pointer', display: 'inline-block' }}
                     >
@@ -501,15 +492,12 @@ function DeliveryDashboard({ user }) {
                       color="primary"
                       sx={{ textDecoration: 'underline', cursor: 'pointer' }}
                       onClick={() => {
-                        document
-                          .getElementById(`invoice-input-${supplier}`)
-                          .click();
+                        document.getElementById(`invoice-input-${supplier}`).click();
                       }}
                     >
                       Click to upload invoice
                     </Typography>
                   )}
-
                   {/* Hidden file input triggers immediate upload */}
                   <input
                     id={`invoice-input-${supplier}`}
@@ -518,17 +506,13 @@ function DeliveryDashboard({ user }) {
                     accept="image/*"
                     onChange={(e) => {
                       if (e.target.files?.[0]) {
-                        handleInvoiceFileChangeAndUpload(
-                          supplier,
-                          e.target.files[0]
-                        );
+                        handleInvoiceFileChangeAndUpload(supplier, e.target.files[0]);
                         // Reset file input so user can re-select the same file if needed
                         e.target.value = null;
                       }
                     }}
                   />
                 </Box>
-
                 {/* Aggregated table for items */}
                 <Box
                   sx={{
@@ -542,9 +526,7 @@ function DeliveryDashboard({ user }) {
                   }}
                 >
                   <Typography sx={{ flex: 1 }}>ID - Name</Typography>
-                  <Typography sx={{ width: '60px', textAlign: 'right' }}>
-                    Qty
-                  </Typography>
+                  <Typography sx={{ flex: 1 }}>Qty</Typography>
                   <Typography>Coll.</Typography>
                   <Typography sx={{ width: '80px', textAlign: 'center' }}>
                     Collected
@@ -590,7 +572,12 @@ function DeliveryDashboard({ user }) {
                         updateChecklistField(item.id, 'collectedQuantity', e.target.value)
                       }
                       sx={{ width: '80px', textAlign: 'right' }}
-                      inputProps={{ min: 0, style: { textAlign: 'right' } }}
+                      inputProps={{
+                        min: 0,
+                        style: { textAlign: 'right' },
+                        inputMode: 'numeric',
+                        pattern: '[0-9]*'
+                      }}
                     />
                     <TextField
                       label="New Price"
@@ -605,7 +592,12 @@ function DeliveryDashboard({ user }) {
                         updateChecklistField(item.id, 'newPrice', e.target.value)
                       }
                       sx={{ width: '100px', textAlign: 'right' }}
-                      inputProps={{ min: 0, style: { textAlign: 'right' } }}
+                      inputProps={{
+                        min: 0,
+                        style: { textAlign: 'right' },
+                        inputMode: 'numeric',
+                        pattern: '[0-9]*'
+                      }}
                     />
                     <Typography sx={{ width: '80px', textAlign: 'right' }}>
                       ${parseFloat(item.price).toFixed(2)}
@@ -617,9 +609,11 @@ function DeliveryDashboard({ user }) {
           })
         )}
       </Box>
+
       <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
-          Deliveries
+        Deliveries
       </Typography>
+
       {/* ACTIVE ORDERS */}
       {activeOrders.length === 0 ? (
         <Typography>No active orders for this week.</Typography>

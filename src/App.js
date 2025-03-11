@@ -56,7 +56,7 @@ function App() {
         {/* Normal user path */}
         <Route
           path="/"
-          element={user ? <ProductsPage user={user} /> : <Navigate to="/login" />}
+          element={user ? <ProductsPage user={user} isDelivery={isDelivery} /> : <Navigate to="/login" />}
         />
 
         <Route

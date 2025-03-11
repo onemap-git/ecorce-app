@@ -1,4 +1,3 @@
-// src/components/ProductsPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
   collection,
@@ -29,8 +28,10 @@ import {
   Checkbox,
 } from '@mui/material';
 import Logo from '../logo.svg';
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
 
-function ProductsPage({ user }) {
+function ProductsPage({ user, isDelivery }) {
   const [products, setProducts] = useState([]);
   const [basket, setBasket] = useState([]);
   const [userAddress, setUserAddress] = useState('');
@@ -44,7 +45,7 @@ function ProductsPage({ user }) {
   const allowedDays = [1, 2, 3];
   const bypassOrderRestrictions = process.env.REACT_APP_BYPASS_ORDER_RESTRICTION === 'true';
   const isOrderAllowed = bypassOrderRestrictions || allowedDays.includes(today.getDay());
-
+  
   function getWeekCode(date) {
     const target = new Date(date.valueOf());
     const dayNr = (target.getDay() + 6) % 7;
@@ -79,7 +80,8 @@ function ProductsPage({ user }) {
   // Retrieve all products
   useEffect(() => {
     const productsRef = collection(firestore, 'products');
-    const unsubscribe = onSnapshot(productsRef, snapshot => {
+    const q = query(productsRef, where("available", "==", true));
+    const unsubscribe = onSnapshot(q, snapshot => {
       const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setProducts(prods);
     });
@@ -133,20 +135,17 @@ function ProductsPage({ user }) {
       }
     });
   };
-
   const updateBasketItem = (id, newQuantity) => {
     console.log(`[ProductsPage] updateBasketItem: id=${id}, newQuantity=${newQuantity}`);
     setBasket(prev =>
       prev.map(item => (item.id === id ? { ...item, quantity: newQuantity } : item))
     );
   };
-
   const updateBasketItemComment = (id, comment) => {
     setBasket(prev =>
       prev.map(item => (item.id === id ? { ...item, comment } : item))
     );
   };
-
   const removeBasketItem = id => {
     console.log(`[ProductsPage] removeBasketItem: id=${id}`);
     setBasket(prev => prev.filter(item => item.id !== id));
@@ -242,9 +241,21 @@ function ProductsPage({ user }) {
     return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
   });
 
+  // Sort products alphabetically by name
+  const sortedFilteredProducts = [...filteredProducts].sort((a, b) => a.name.localeCompare(b.name));
+
   console.log(
     `[ProductsPage] render: searchTerm="${searchTerm}", selectedCategory="${selectedCategory}", selectedSupplier="${selectedSupplier}", bioOnly=${bioOnly}, totalProducts=${products.length}, filteredProducts=${filteredProducts.length}`
   );
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
 
   return (
     <Container sx={{ pt: 4, pb: 10 }}>
@@ -262,6 +273,14 @@ function ProductsPage({ user }) {
               <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                 {user.email}
               </Typography>
+              <Button variant="outlined" color="secondary" onClick={handleLogout} sx={{ mt: 1 }}>
+                Log Out
+              </Button>
+              {isDelivery && (
+                <Button variant="outlined" component={Link} to="/delivery" sx={{ mt: 1, ml: 1 }}>
+                  Delivery Dashboard
+                </Button>
+              )}
               {userAddress && (
                 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                   {userAddress}
@@ -318,21 +337,13 @@ function ProductsPage({ user }) {
               </Select>
             </FormControl>
             <FormControlLabel
-              control={
-                <Checkbox
-                  checked={bioOnly}
-                  onChange={(e) => setBioOnly(e.target.checked)}
-                />
-              }
+              control={<Checkbox checked={bioOnly} onChange={(e) => setBioOnly(e.target.checked)} />}
               label="Bio seulement"
             />
           </Box>
         </Box>
         <Box className="table-container">
-          <VirtualizedProductsTable
-            products={filteredProducts}
-            addToBasket={addToBasket}
-          />
+          <VirtualizedProductsTable products={sortedFilteredProducts} addToBasket={addToBasket} />
         </Box>
         <Basket
           basket={basket}
@@ -343,7 +354,6 @@ function ProductsPage({ user }) {
           isOrderAllowed={isOrderAllowed}
         />
       </Box>
-      {/* Panier dupliqué si nécessaire en bas */}
       <Basket
         basket={basket}
         updateBasketItem={updateBasketItem}

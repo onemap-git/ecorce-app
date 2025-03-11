@@ -1,5 +1,5 @@
 # Combined source code for commit: 123
-# Generated on: 2025-03-05 04:12:21
+# Generated on: 2025-03-11 11:37:54
 
 
 
@@ -202,7 +202,7 @@ element={user ? <Navigate to="/" /> : <Login />}
 {/* Normal user path */}
 <Route
 path="/"
-element={user ? <ProductsPage user={user} /> : <Navigate to="/login" />}
+element={user ? <ProductsPage user={user} isDelivery={isDelivery} /> : <Navigate to="/login" />}
 />
 <Route
 path="/orders"
@@ -493,7 +493,6 @@ export default NoTag;
 
 
 # ** File: src/components/DeliveryOrderCard.js **
-// src/components/DeliveredOrderCard.js
 import React, { useState, useEffect } from 'react';
 import { Paper, Typography, Box, Button } from '@mui/material';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -501,10 +500,9 @@ import { firestore } from '../firebase';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 const DeliveredOrderCard = ({ order }) => {
-// Additional state for company info:
+// Only fetching company info and address now; email comes from order.email
 const [address, setAddress] = useState(null);
 const [companyName, setCompanyName] = useState('');
-const [partnerEmail, setPartnerEmail] = useState('');
 useEffect(() => {
 const fetchPartnerInfo = async () => {
 try {
@@ -515,7 +513,6 @@ if (!querySnapshot.empty) {
 const partnerData = querySnapshot.docs[0].data();
 setAddress(partnerData.contact_address_complete || '');
 setCompanyName(partnerData.company_name || '');
-setPartnerEmail(partnerData.email || '');
 }
 } catch (error) {
 console.error('Error fetching address/company info', error);
@@ -529,9 +526,7 @@ doc.setFontSize(16);
 doc.text('Delivery Bill', 14, 20);
 doc.setFontSize(12);
 doc.text(`Order ID: ${order.id}`, 14, 30);
-const deliveredOn = order.deliveredAt
-? order.deliveredAt.toDate().toLocaleString()
-: 'N/A';
+const deliveredOn = order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A';
 doc.text(`Delivered on: ${deliveredOn}`, 14, 40);
 let startY = 50;
 // Company info
@@ -539,10 +534,9 @@ if (companyName) {
 doc.text(`Company: ${companyName}`, 14, startY);
 startY += 8;
 }
-if (partnerEmail) {
-doc.text(`Email: ${partnerEmail}`, 14, startY);
+// Always show email from order.email
+doc.text(`Email: ${order.email}`, 14, startY);
 startY += 8;
-}
 if (address) {
 doc.text(`Address: ${address}`, 14, startY);
 startY += 10;
@@ -562,8 +556,8 @@ body: tableRows,
 styles: { fontSize: 10 },
 headStyles: { fillColor: [41, 128, 185] },
 columnStyles: {
-2: { halign: 'right' }, // Right-align Quantity
-3: { halign: 'right' }  // Right-align Price
+2: { halign: 'right' },
+3: { halign: 'right' }
 }
 });
 // Add signature if available.
@@ -585,49 +579,30 @@ Order ID: {order.id}
 Company: {companyName}
 </Typography>
 )}
-{partnerEmail && (
 <Typography variant="body2" sx={{ mb: 1 }}>
-Email: {partnerEmail}
+Email: {order.email}
 </Typography>
-)}
 {address && (
 <Typography variant="body2" sx={{ mb: 1 }}>
 Address: {address}
 </Typography>
 )}
 <Typography variant="body2">
-Delivered on:{' '}
-{order.deliveredAt
-? order.deliveredAt.toDate().toLocaleString()
-: 'N/A'}
+Delivered on: {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
 </Typography>
 {/* Web Interface: Items in columns */}
 {order.items && order.items.length > 0 && (
 <Box sx={{ mt: 2 }}>
 {/* Header Row */}
-<Box
-sx={{
-display: 'flex',
-borderBottom: '1px solid #ccc',
-pb: 1,
-mb: 1
-}}
->
+<Box sx={{ display: 'flex', borderBottom: '1px solid #ccc', pb: 1, mb: 1 }}>
 <Box sx={{ flex: 1, fontWeight: 'bold' }}>ID</Box>
 <Box sx={{ flex: 3, fontWeight: 'bold' }}>Name</Box>
-<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>
-Quantity
-</Box>
-<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>
-Price
-</Box>
+<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Quantity</Box>
+<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Price</Box>
 </Box>
 {/* Data Rows */}
 {order.items.map(item => (
-<Box
-key={item.id}
-sx={{ display: 'flex', borderBottom: '1px dashed #ccc', pb: 1, mb: 1 }}
->
+<Box key={item.id} sx={{ display: 'flex', borderBottom: '1px dashed #ccc', pb: 1, mb: 1 }}>
 <Box sx={{ flex: 1 }}>{item.id}</Box>
 <Box sx={{ flex: 3 }}>{item.name}</Box>
 <Box sx={{ flex: 1, textAlign: 'right' }}>{item.quantity}</Box>
@@ -740,7 +715,6 @@ doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierL
 const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChange }) => {
 const [address, setAddress] = useState(null);
 const [companyName, setCompanyName] = useState('');
-const [partnerEmail, setPartnerEmail] = useState('');
 useEffect(() => {
 const fetchPartnerInfo = async () => {
 try {
@@ -751,7 +725,6 @@ if (!querySnapshot.empty) {
 const partnerData = querySnapshot.docs[0].data();
 setAddress(partnerData.contact_address_complete || '');
 setCompanyName(partnerData.company_name || '');
-setPartnerEmail(partnerData.email || '');
 }
 } catch (error) {
 console.error('Error fetching partner info', error);
@@ -770,11 +743,9 @@ Order ID: {order.id}
 Company: {companyName}
 </Typography>
 )}
-{partnerEmail && (
 <Typography variant="body2" sx={{ mb: 1 }}>
-Email: {partnerEmail}
+Email: {order.email}
 </Typography>
-)}
 {address && (
 <Typography variant="body2" sx={{ mb: 1 }}>
 Address: {address}
@@ -787,17 +758,29 @@ Delivery Status: {order.deliveryStatus || 'N/A'}
 {order.items?.map((item) => (
 <Box key={item.id} sx={{ mb: 1 }}>
 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+{/* Item name */}
 <Typography sx={{ flex: 1 }}>{item.name}</Typography>
+{/* New supplier column */}
+<Typography sx={{ flex: 1 }}>
+{item.supplier || 'N/A'}
+</Typography>
+{/* Price */}
 <Typography sx={{ width: '80px', textAlign: 'right' }}>
 ${parseFloat(item.price).toFixed(2)}
 </Typography>
+{/* Quantity */}
 <TextField
 type="number"
 size="small"
 value={item.quantity}
 onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
 sx={{ width: '60px', textAlign: 'right' }}
-inputProps={{ style: { textAlign: 'right' }, min: 0 }}
+inputProps={{
+style: { textAlign: 'right' },
+min: 0,
+inputMode: 'numeric',
+pattern: '[0-9]*'
+}}
 />
 </Box>
 {item.comment && (
@@ -977,7 +960,7 @@ const order = orders.find(o => o.id === orderId);
 if (!order) return;
 const updatedItems = order.items.map(item => {
 if (item.id === itemId) {
-return { ...item, quantity: parseInt(newQty, 10) || 1 };
+return { ...item, quantity: parseInt(newQty, 10) || 0 };
 }
 return item;
 });
@@ -1073,10 +1056,7 @@ Delivery Dashboard
 Orders for week: {currentWeek}
 </Typography>
 {/* Aggregated Items, grouped by supplier */}
-<Box
-ref={printRef}
-sx={{ mt: 4, border: '1px solid #ccc', p: 2, borderRadius: 1 }}
->
+<Box ref={printRef} sx={{ mt: 4, border: '1px solid #ccc', p: 2, borderRadius: 1 }}>
 <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
 <Typography variant="h5" sx={{ ml: 2 }}>
 Aggregated Lists - Week {currentWeek}
@@ -1106,9 +1086,7 @@ Export PDF
 // If there's already an uploaded invoice, show a small preview
 <Box
 onClick={() => {
-document
-.getElementById(`invoice-input-${supplier}`)
-.click();
+document.getElementById(`invoice-input-${supplier}`).click();
 }}
 sx={{ cursor: 'pointer', display: 'inline-block' }}
 >
@@ -1128,9 +1106,7 @@ variant="body2"
 color="primary"
 sx={{ textDecoration: 'underline', cursor: 'pointer' }}
 onClick={() => {
-document
-.getElementById(`invoice-input-${supplier}`)
-.click();
+document.getElementById(`invoice-input-${supplier}`).click();
 }}
 >
 Click to upload invoice
@@ -1144,10 +1120,7 @@ style={{ display: 'none' }}
 accept="image/*"
 onChange={(e) => {
 if (e.target.files?.[0]) {
-handleInvoiceFileChangeAndUpload(
-supplier,
-e.target.files[0]
-);
+handleInvoiceFileChangeAndUpload(supplier, e.target.files[0]);
 // Reset file input so user can re-select the same file if needed
 e.target.value = null;
 }
@@ -1167,9 +1140,7 @@ pb: 1
 }}
 >
 <Typography sx={{ flex: 1 }}>ID - Name</Typography>
-<Typography sx={{ width: '60px', textAlign: 'right' }}>
-Qty
-</Typography>
+<Typography sx={{ flex: 1 }}>Qty</Typography>
 <Typography>Coll.</Typography>
 <Typography sx={{ width: '80px', textAlign: 'center' }}>
 Collected
@@ -1215,7 +1186,12 @@ onChange={(e) =>
 updateChecklistField(item.id, 'collectedQuantity', e.target.value)
 }
 sx={{ width: '80px', textAlign: 'right' }}
-inputProps={{ min: 0, style: { textAlign: 'right' } }}
+inputProps={{
+min: 0,
+style: { textAlign: 'right' },
+inputMode: 'numeric',
+pattern: '[0-9]*'
+}}
 />
 <TextField
 label="New Price"
@@ -1230,7 +1206,12 @@ onChange={(e) =>
 updateChecklistField(item.id, 'newPrice', e.target.value)
 }
 sx={{ width: '100px', textAlign: 'right' }}
-inputProps={{ min: 0, style: { textAlign: 'right' } }}
+inputProps={{
+min: 0,
+style: { textAlign: 'right' },
+inputMode: 'numeric',
+pattern: '[0-9]*'
+}}
 />
 <Typography sx={{ width: '80px', textAlign: 'right' }}>
 ${parseFloat(item.price).toFixed(2)}
@@ -1644,7 +1625,9 @@ FormControlLabel,
 Checkbox,
 } from '@mui/material';
 import Logo from '../logo.svg';
-function ProductsPage({ user }) {
+import { signOut } from 'firebase/auth';
+import { auth } from '../firebase';
+function ProductsPage({ user, isDelivery }) {
 const [products, setProducts] = useState([]);
 const [basket, setBasket] = useState([]);
 const [userAddress, setUserAddress] = useState('');
@@ -1690,7 +1673,8 @@ fetchAddress();
 // Retrieve all products
 useEffect(() => {
 const productsRef = collection(firestore, 'products');
-const unsubscribe = onSnapshot(productsRef, snapshot => {
+const q = query(productsRef, where("available", "==", true));
+const unsubscribe = onSnapshot(q, snapshot => {
 const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 setProducts(prods);
 });
@@ -1846,6 +1830,14 @@ return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
 console.log(
 `[ProductsPage] render: searchTerm="${searchTerm}", selectedCategory="${selectedCategory}", selectedSupplier="${selectedSupplier}", bioOnly=${bioOnly}, totalProducts=${products.length}, filteredProducts=${filteredProducts.length}`
 );
+// Logout handler
+const handleLogout = async () => {
+try {
+await signOut(auth);
+} catch (error) {
+console.error("Error signing out:", error);
+}
+};
 return (
 <Container sx={{ pt: 4, pb: 10 }}>
 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
@@ -1862,6 +1854,23 @@ Voir l'historique des commandes
 <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
 {user.email}
 </Typography>
+<Button variant="outlined" color="secondary" onClick={handleLogout} sx={{ mt: 1 }}>
+Log Out
+</Button>
+{/*
+Conditionally render a button to go to /delivery if the user has delivery access.
+(Make sure to pass isDelivery as a prop from App.js.)
+*/}
+{isDelivery && (
+<Button
+variant="outlined"
+component={Link}
+to="/delivery"
+sx={{ mt: 1, ml: 1 }}
+>
+Delivery Dashboard
+</Button>
+)}
 {userAddress && (
 <Typography variant="body2" sx={{ color: 'text.secondary' }}>
 {userAddress}
@@ -1918,21 +1927,13 @@ label="Fournisseur"
 </Select>
 </FormControl>
 <FormControlLabel
-control={
-<Checkbox
-checked={bioOnly}
-onChange={(e) => setBioOnly(e.target.checked)}
-/>
-}
+control={<Checkbox checked={bioOnly} onChange={(e) => setBioOnly(e.target.checked)} />}
 label="Bio seulement"
 />
 </Box>
 </Box>
 <Box className="table-container">
-<VirtualizedProductsTable
-products={filteredProducts}
-addToBasket={addToBasket}
-/>
+<VirtualizedProductsTable products={filteredProducts} addToBasket={addToBasket} />
 </Box>
 <Basket
 basket={basket}

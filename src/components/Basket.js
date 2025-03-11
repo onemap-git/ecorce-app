@@ -1,4 +1,3 @@
-// src/components/Basket.js
 import React, { useState, useEffect } from 'react';
 import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/material';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
@@ -60,51 +59,53 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
             <Typography>Aucun article dans le panier</Typography>
           ) : (
             <>
-              {basket.map((item) => {
-                const lineTotal = (item.price * item.quantity).toFixed(2);
-                return (
-                  <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', mb: 1, gap: 1 }}>
-                    <Box
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 2,
-                        flexWrap: 'wrap',
-                      }}
-                    >
-                      <Typography sx={{ flex: 2 }}>
-                        {item.name} - ${parseFloat(item.price).toFixed(2)}
-                      </Typography>
-                      <Typography sx={{ width: '100px', textAlign: 'right' }}>
-                        ${lineTotal}
-                      </Typography>
-                      <TextField
-                        type="number"
-                        value={item.quantity}
-                        onChange={(e) => updateBasketItem(item.id, parseInt(e.target.value, 10))}
-                        inputProps={{ min: 1 }}
-                        size="small"
-                        sx={{ width: '60px' }}
-                      />
-                      <IconButton onClick={() => removeBasketItem(item.id)}>
-                        <RemoveCircleOutlineIcon />
-                      </IconButton>
-                      <Button variant="text" onClick={() => toggleComment(item.id)}>
-                        {commentOpen[item.id] ? 'Masquer le commentaire' : 'Ajouter un commentaire'}
-                      </Button>
+              {[...basket]
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((item) => {
+                  const lineTotal = (item.price * item.quantity).toFixed(2);
+                  return (
+                    <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', mb: 1, gap: 1 }}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 2,
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <Typography sx={{ flex: 2 }}>
+                          {item.name} - ${parseFloat(item.price).toFixed(2)}
+                        </Typography>
+                        <Typography sx={{ width: '100px', textAlign: 'right' }}>
+                          ${lineTotal}
+                        </Typography>
+                        <TextField
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateBasketItem(item.id, parseInt(e.target.value, 10))}
+                          inputProps={{ min: 1 }}
+                          size="small"
+                          sx={{ width: '60px' }}
+                        />
+                        <IconButton onClick={() => removeBasketItem(item.id)}>
+                          <RemoveCircleOutlineIcon />
+                        </IconButton>
+                        <Button variant="text" onClick={() => toggleComment(item.id)}>
+                          {commentOpen[item.id] ? 'Masquer le commentaire' : 'Ajouter un commentaire'}
+                        </Button>
+                      </Box>
+                      {commentOpen[item.id] && (
+                        <TextField
+                          label="Commentaire"
+                          variant="outlined"
+                          fullWidth
+                          value={item.comment || ''}
+                          onChange={(e) => updateBasketItemComment(item.id, e.target.value)}
+                        />
+                      )}
                     </Box>
-                    {commentOpen[item.id] && (
-                      <TextField
-                        label="Commentaire"
-                        variant="outlined"
-                        fullWidth
-                        value={item.comment || ''}
-                        onChange={(e) => updateBasketItemComment(item.id, e.target.value)}
-                      />
-                    )}
-                  </Box>
-                );
-              })}
+                  );
+                })}
             </>
           )}
         </Box>
