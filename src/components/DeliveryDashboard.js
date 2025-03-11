@@ -14,8 +14,7 @@ import {
 } from 'firebase/firestore';
 import { firestore, storage } from '../firebase';
 import SignatureCanvas from 'react-signature-canvas';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import {
   Box,
   Typography,
@@ -23,177 +22,18 @@ import {
   Button,
   TextField,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions
 } from '@mui/material';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import Logo from '../logo.png';
-import DeliveredOrderCard from './DeliveryOrderCard';
-
-// Helper to compute week code (e.g., "07-2025")
-function getWeekCode(date) {
-  const target = new Date(date);
-  const dayNr = (target.getDay() + 6) % 7; // Monday=0
-  target.setDate(target.getDate() - dayNr + 3);
-  const firstThursday = new Date(target.getFullYear(), 0, 4);
-  const diff = target - firstThursday;
-  const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
-  return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
-}
-
-// Generate multi-page PDF of aggregated items
-function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierLabel) {
-  const doc = new jsPDF();
-  doc.setFontSize(16);
-  doc.text(`Aggregated Products - Week ${currentWeek}`, 14, 20);
-  doc.setFontSize(12);
-  if (supplierLabel) {
-    doc.text(`Supplier: ${supplierLabel}`, 14, 30);
-  }
-
-  const columns = [
-    { header: 'ID - Name', dataKey: 'name' },
-    { header: 'Qty', dataKey: 'quantity' },
-    { header: 'Price', dataKey: 'price' },
-    { header: 'Line Total', dataKey: 'total' }
-  ];
-
-  const rows = aggregatedItemsArray.map(item => ({
-    name: `ID: ${item.id} - ${item.name}`,
-    quantity: item.quantity,
-    price: `$${parseFloat(item.price).toFixed(2)}`,
-    total: `$${(item.price * item.quantity).toFixed(2)}`
-  }));
-
-  autoTable(doc, {
-    startY: 40,
-    head: [columns.map(col => col.header)],
-    body: rows.map(row => columns.map(col => row[col.dataKey])),
-    styles: { fontSize: 10 },
-    headStyles: { fillColor: [41, 128, 185] },
-    margin: { horizontal: 14 }
-  });
-
-  doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierLabel}` : ''}.pdf`);
-}
-
-/**
- * Component for an active order (not delivered yet).
- * Displays items, plus company info from `res_partner`.
- */
-const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChange }) => {
-  const [address, setAddress] = useState(null);
-  const [companyName, setCompanyName] = useState('');
-
-  useEffect(() => {
-    const fetchPartnerInfo = async () => {
-      try {
-        const partnersRef = collection(firestore, 'res_partner');
-        const qPartners = query(partnersRef, where('email', '==', order.email));
-        const querySnapshot = await getDocs(qPartners);
-        if (!querySnapshot.empty) {
-          const partnerData = querySnapshot.docs[0].data();
-          setAddress(partnerData.contact_address_complete || '');
-          setCompanyName(partnerData.company_name || '');
-        }
-      } catch (error) {
-        console.error('Error fetching partner info', error);
-      }
-    };
-    fetchPartnerInfo();
-  }, [order.email]);
-
-  return (
-    <Paper sx={{ mb: 2, p: 2 }}>
-      <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-        Order ID: {order.id}
-      </Typography>
-      {/* Display partner info (company, email, address) */}
-      {companyName && (
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          Company: {companyName}
-        </Typography>
-      )}
-      <Typography variant="body2" sx={{ mb: 1 }}>
-        Email: {order.email}
-      </Typography>
-      {address && (
-        <Typography variant="body2" sx={{ mb: 1 }}>
-          Address: {address}
-        </Typography>
-      )}
-      <Typography variant="body2">
-        Delivery Status: {order.deliveryStatus || 'N/A'}
-      </Typography>
-      <Box sx={{ mt: 2 }}>
-        {order.items?.map((item) => (
-          <Box key={item.id} sx={{ mb: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              {/* Item name */}
-              <Typography sx={{ flex: 1 }}>{item.name}</Typography>
-              {/* New supplier column */}
-              <Typography sx={{ flex: 1 }}>
-                {item.supplier || 'N/A'}
-              </Typography>
-              {/* Price */}
-              <Typography sx={{ width: '80px', textAlign: 'right' }}>
-                ${parseFloat(item.price).toFixed(2)}
-              </Typography>
-              {/* Quantity */}
-              <TextField
-                type="number"
-                size="small"
-                value={item.quantity}
-                onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
-                sx={{ width: '60px', textAlign: 'right' }}
-                inputProps={{
-                  style: { textAlign: 'right' },
-                  min: 0,
-                  inputMode: 'numeric',
-                  pattern: '[0-9]*'
-                }}
-              />
-            </Box>
-            {item.comment && (
-              <Typography variant="body2" sx={{ ml: 2, color: 'grey.600' }}>
-                Comment: {item.comment}
-              </Typography>
-            )}
-          </Box>
-        ))}
-      </Box>
-      <Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
-        <Button
-          variant="contained"
-          onClick={() => onMarkDelivered(order.id)}
-          disabled={!order.signature}
-        >
-          Mark Delivered
-        </Button>
-        {order.signature ? (
-          <Box
-            sx={{
-              border: '1px solid #ccc',
-              p: 1,
-              maxWidth: 200,
-              maxHeight: 100,
-              overflow: 'hidden'
-            }}
-          >
-            <img
-              src={order.signature}
-              alt="Signature"
-              style={{ width: '100%', height: 'auto' }}
-            />
-          </Box>
-        ) : (
-          <Button variant="outlined" onClick={() => onOpenSignaturePad(order.id)}>
-            Capture Signature
-          </Button>
-        )}
-      </Box>
-    </Paper>
-  );
-};
+import DeliveredOrderCard from './DeliveredOrderCard';
+import AddProductDialog from './AddProductDialog';
+import OrderCard from './OrderCard';
+import { getWeekCode } from '../utils/dateUtils';
+import { exportAggregatedPDF } from '../utils/pdfUtils';
 
 function DeliveryDashboard({ user }) {
   const [orders, setOrders] = useState([]);
@@ -204,6 +44,24 @@ function DeliveryDashboard({ user }) {
 
   // For supplier invoices
   const [supplierInvoiceUrl, setSupplierInvoiceUrl] = useState({});
+
+  // -----------------------------
+  // Existing "Add Product" feature
+  // -----------------------------
+  const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
+  const [selectedOrderForProductAddition, setSelectedOrderForProductAddition] = useState(null);
+
+  // -----------------------------
+  // New "Replace Product" feature
+  // -----------------------------
+  // We'll reuse AddProductDialog in "replace" mode, then show a confirm dialog.
+  const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+  const [oldProductIdToReplace, setOldProductIdToReplace] = useState(null);
+
+  // A second dialog to confirm the replacement
+  const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+  const [pendingNewProduct, setPendingNewProduct] = useState(null);
+  const [ordersAffectedCount, setOrdersAffectedCount] = useState(0);
 
   // 1) Fetch orders for current week
   useEffect(() => {
@@ -334,6 +192,10 @@ function DeliveryDashboard({ user }) {
   };
 
   // 5) Active vs. delivered orders
+  const activeOrders = orders.filter(order => order.deliveryStatus !== 'delivered');
+  const deliveredOrders = orders.filter(order => order.deliveryStatus === 'delivered');
+
+  // 7) Quantity update for order items
   const handleQuantityChange = async (orderId, itemId, newQty) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -353,6 +215,7 @@ function DeliveryDashboard({ user }) {
     }
   };
 
+  // 8) Mark order as delivered
   const markAsDelivered = async (orderId) => {
     try {
       await updateDoc(doc(firestore, 'orders', orderId), {
@@ -386,18 +249,177 @@ function DeliveryDashboard({ user }) {
     }
   };
 
-  // 7) Separate orders
-  const activeOrders = orders.filter(order => order.deliveryStatus !== 'delivered');
-  const deliveredOrders = orders.filter(order => order.deliveryStatus === 'delivered');
+  // -----------------------------
+  // Existing "Add Product to Order" Feature
+  // -----------------------------
+  const handleOpenAddProduct = (orderId) => {
+    setSelectedOrderForProductAddition(orderId);
+    setAddProductDialogOpen(true);
+  };
+  const handleCloseAddProduct = () => {
+    setAddProductDialogOpen(false);
+    setSelectedOrderForProductAddition(null);
+  };
+  const handleAddProductToOrder = async (orderId, product) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    let newItems = [];
+    let found = false;
+    if (order.items) {
+      newItems = order.items.map(item => {
+        if (item.id === product.id) {
+          found = true;
+          return { ...item, quantity: item.quantity + 1 };
+        }
+        return item;
+      });
+    } else {
+      newItems = [];
+    }
+    if (!found) {
+      newItems.push({ ...product, quantity: 1 });
+    }
+    try {
+      await updateDoc(doc(firestore, 'orders', orderId), {
+        items: newItems,
+        updatedAt: serverTimestamp()
+      });
+      console.log(`Product ${product.name} added to order ${orderId}`);
+    } catch (error) {
+      console.error('Error adding product to order', error);
+    }
+  };
 
-  // 8) PDF Export per supplier
+  // -----------------------------
+  // New "Replace Product" Feature
+  // -----------------------------
+  const handleOpenReplaceDialog = (oldProductId) => {
+    setOldProductIdToReplace(oldProductId);
+    setReplaceDialogOpen(true);
+  };
+  const handleCloseReplaceDialog = () => {
+    setReplaceDialogOpen(false);
+    setOldProductIdToReplace(null);
+  };
+
+  // Step 1: user picks new product in AddProductDialog -> confirm replacement
+  const handleStartReplaceConfirmation = (newProduct) => {
+    if (!oldProductIdToReplace) return;
+
+    // Count how many orders would be changed
+    let count = 0;
+    orders.forEach(order => {
+      const items = order.items || [];
+      if (items.some(item => item.id === oldProductIdToReplace)) {
+        count++;
+      }
+    });
+    setOrdersAffectedCount(count);
+
+    // We'll store newProduct in state, then show the confirmation dialog
+    setPendingNewProduct(newProduct);
+
+    // Close the replace product selection dialog
+    setReplaceDialogOpen(false);
+
+    // Open the final confirm dialog
+    setReplaceConfirmOpen(true);
+  };
+
+  // Step 2: If user confirms, do the actual replacement
+  const handleConfirmReplace = () => {
+    if (!pendingNewProduct || !oldProductIdToReplace) return;
+    handleReplaceProductInAllOrders(pendingNewProduct);
+    setReplaceConfirmOpen(false);
+    setPendingNewProduct(null);
+  };
+
+  // Step 2b: user cancels
+  const handleCancelReplace = () => {
+    setReplaceConfirmOpen(false);
+    setPendingNewProduct(null);
+    setOldProductIdToReplace(null);
+  };
+
+  /**
+   * Actually replaces oldProductIdToReplace with newProduct across all relevant orders,
+   * then re-aggregates local data so UI updates.
+   */
+  const handleReplaceProductInAllOrders = async (newProduct) => {
+    let updatedCount = 0;
+    const newOrdersState = orders.map(order => {
+      const items = order.items || [];
+      let changed = false;
+
+      const updatedItems = items.map(item => {
+        if (item.id === oldProductIdToReplace) {
+          changed = true;
+          return {
+            ...item,
+            id: newProduct.id,
+            name: newProduct.name,
+            price: newProduct.price,
+            supplier: newProduct.supplier || 'Unknown'
+          };
+        }
+        return item;
+      });
+
+      if (changed) {
+        updatedCount++;
+        // Update doc in Firestore
+        updateDoc(doc(firestore, 'orders', order.id), {
+          items: updatedItems,
+          updatedAt: serverTimestamp()
+        }).catch(err => {
+          console.error(`Error updating order ${order.id}`, err);
+        });
+        return { ...order, items: updatedItems };
+      }
+      return order;
+    });
+
+    console.log(`Replaced product ${oldProductIdToReplace} with ${newProduct.id} in ${updatedCount} orders.`);
+
+    // Update local orders state
+    setOrders(newOrdersState);
+
+    // Re-aggregate
+    const reAggregated = {};
+    newOrdersState.forEach(order => {
+      if (order.items) {
+        order.items.forEach(item => {
+          const supplier = item.supplier || 'Unknown';
+          if (!reAggregated[supplier]) {
+            reAggregated[supplier] = {};
+          }
+          if (!reAggregated[supplier][item.id]) {
+            reAggregated[supplier][item.id] = { ...item };
+          } else {
+            reAggregated[supplier][item.id].quantity += item.quantity;
+          }
+        });
+      }
+    });
+
+    // Overwrite aggregatedBySupplier
+    Object.keys(aggregatedBySupplier).forEach(k => delete aggregatedBySupplier[k]);
+    Object.keys(reAggregated).forEach(sup => {
+      aggregatedBySupplier[sup] = reAggregated[sup];
+    });
+
+    // Clear old product ID
+    setOldProductIdToReplace(null);
+  };
+
+  // 9) PDF Export per supplier
   const handleExportPDF = (supplier) => {
     const itemsObj = aggregatedBySupplier[supplier] || {};
     const itemsArray = Object.values(itemsObj);
     exportAggregatedPDF(itemsArray, currentWeek, supplier);
   };
 
-  // 9) Auto-upload invoices
+  // 10) Auto-upload invoices
   const handleInvoiceFileChangeAndUpload = async (supplier, file) => {
     try {
       const invoiceRef = ref(storage, `invoices/${currentWeek}/${supplier}/${file.name}`);
@@ -466,10 +488,9 @@ function DeliveryDashboard({ user }) {
                 >
                   Export PDF
                 </Button>
-                {/* Image upload area - auto-upload, small preview */}
+                {/* Image upload area */}
                 <Box sx={{ mb: 2 }}>
                   {supplierInvoiceUrl[supplier] ? (
-                    // If there's already an uploaded invoice, show a small preview
                     <Box
                       onClick={() => {
                         document.getElementById(`invoice-input-${supplier}`).click();
@@ -486,7 +507,6 @@ function DeliveryDashboard({ user }) {
                       </Typography>
                     </Box>
                   ) : (
-                    // Otherwise, prompt to upload
                     <Typography
                       variant="body2"
                       color="primary"
@@ -498,7 +518,6 @@ function DeliveryDashboard({ user }) {
                       Click to upload invoice
                     </Typography>
                   )}
-                  {/* Hidden file input triggers immediate upload */}
                   <input
                     id={`invoice-input-${supplier}`}
                     type="file"
@@ -507,12 +526,12 @@ function DeliveryDashboard({ user }) {
                     onChange={(e) => {
                       if (e.target.files?.[0]) {
                         handleInvoiceFileChangeAndUpload(supplier, e.target.files[0]);
-                        // Reset file input so user can re-select the same file if needed
                         e.target.value = null;
                       }
                     }}
                   />
                 </Box>
+
                 {/* Aggregated table for items */}
                 <Box
                   sx={{
@@ -602,6 +621,15 @@ function DeliveryDashboard({ user }) {
                     <Typography sx={{ width: '80px', textAlign: 'right' }}>
                       ${parseFloat(item.price).toFixed(2)}
                     </Typography>
+
+                    {/* NEW: Replace button */}
+                    <Button
+                      variant="outlined"
+                      size="small"
+                      onClick={() => handleOpenReplaceDialog(item.id)}
+                    >
+                      Replace
+                    </Button>
                   </Box>
                 ))}
               </Paper>
@@ -625,6 +653,7 @@ function DeliveryDashboard({ user }) {
             onMarkDelivered={markAsDelivered}
             onOpenSignaturePad={openSignaturePad}
             onQuantityChange={handleQuantityChange}
+            onAddProduct={handleOpenAddProduct}
           />
         ))
       )}
@@ -680,6 +709,44 @@ function DeliveryDashboard({ user }) {
           </Box>
         </Box>
       )}
+
+      {/* Existing "Add Product" Dialog */}
+      <AddProductDialog
+        open={addProductDialogOpen}
+        onClose={handleCloseAddProduct}
+        onProductSelect={(product) => {
+          handleAddProductToOrder(selectedOrderForProductAddition, product);
+          handleCloseAddProduct();
+        }}
+      />
+
+      {/* NEW "Replace Product" Dialog (step 1: pick product) */}
+      <AddProductDialog
+        open={replaceDialogOpen}
+        onClose={handleCloseReplaceDialog}
+        onProductSelect={(product) => {
+          handleStartReplaceConfirmation(product);
+        }}
+      />
+
+      {/* Confirmation Dialog (step 2: confirm) */}
+      <Dialog open={replaceConfirmOpen} onClose={handleCancelReplace}>
+        <DialogTitle>Confirm Product Replacement</DialogTitle>
+        <DialogContent>
+          <Typography>
+            You are about to replace product <strong>{oldProductIdToReplace}</strong> in{' '}
+            <strong>{ordersAffectedCount}</strong> order(s). Continue?
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCancelReplace} color="secondary">
+            Cancel
+          </Button>
+          <Button onClick={handleConfirmReplace} variant="contained" color="primary">
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

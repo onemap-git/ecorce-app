@@ -1,5 +1,5 @@
 # Combined source code for commit: 123
-# Generated on: 2025-03-11 11:37:54
+# Generated on: 2025-03-11 12:54:24
 
 
 
@@ -234,8 +234,218 @@ return parseFloat(value).toFixed(2);
 
 
 
+# ** File: src/utils/pdfUtils.js **
+// src/utils/pdfUtils.js
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+export function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierLabel) {
+const doc = new jsPDF();
+doc.setFontSize(16);
+doc.text(`Aggregated Products - Week ${currentWeek}`, 14, 20);
+doc.setFontSize(12);
+if (supplierLabel) {
+doc.text(`Supplier: ${supplierLabel}`, 14, 30);
+}
+const columns = [
+{ header: 'ID - Name', dataKey: 'name' },
+{ header: 'Qty', dataKey: 'quantity' },
+{ header: 'Price', dataKey: 'price' },
+{ header: 'Line Total', dataKey: 'total' }
+];
+const rows = aggregatedItemsArray.map(item => ({
+name: `ID: ${item.id} - ${item.name}`,
+quantity: item.quantity,
+price: `$${parseFloat(item.price).toFixed(2)}`,
+total: `$${(item.price * item.quantity).toFixed(2)}`
+}));
+autoTable(doc, {
+startY: 40,
+head: [columns.map(col => col.header)],
+body: rows.map(row => columns.map(col => row[col.dataKey])),
+styles: { fontSize: 10 },
+headStyles: { fillColor: [41, 128, 185] },
+margin: { horizontal: 14 }
+});
+doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierLabel}` : ''}.pdf`);
+}
+
+
+
+# ** File: src/utils/dateUtils.js **
+// src/utils/dateUtils.js
+export function getWeekCode(date) {
+const target = new Date(date);
+const dayNr = (target.getDay() + 6) % 7; // Monday = 0
+target.setDate(target.getDate() - dayNr + 3);
+const firstThursday = new Date(target.getFullYear(), 0, 4);
+const diff = target - firstThursday;
+const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
+return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
+}
+
+
+
+# ** File: src/components/AddProductDialog.js **
+// src/components/AddProductDialog.js
+import React, { useState, useEffect } from 'react';
+import { collection, query, where, onSnapshot, addDoc } from 'firebase/firestore';
+import { firestore } from '../firebase';
+import {
+Dialog,
+DialogTitle,
+DialogContent,
+DialogActions,
+TextField,
+List,
+ListItem,
+ListItemText,
+Button,
+Box
+} from '@mui/material';
+export default function AddProductDialog({ open, onClose, onProductSelect }) {
+// mode can be "select" (choose an existing product) or "manual" (add new)
+const [mode, setMode] = useState('select');
+const [searchTerm, setSearchTerm] = useState('');
+const [products, setProducts] = useState([]);
+// State for manual product form
+const [newProduct, setNewProduct] = useState({ name: '', code: '', price: '' });
+const [loading, setLoading] = useState(false);
+// Fetch available products
+useEffect(() => {
+const productsRef = collection(firestore, 'products');
+// Assuming manually added products are also available
+const q = query(productsRef, where('available', '==', true));
+const unsubscribe = onSnapshot(q, snapshot => {
+const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+// Sort so that manually added ones appear first
+prods.sort((a, b) => {
+if (a.manuallyAdded && !b.manuallyAdded) return -1;
+if (!a.manuallyAdded && b.manuallyAdded) return 1;
+return a.name.localeCompare(b.name);
+});
+setProducts(prods);
+});
+return () => unsubscribe();
+}, []);
+// Filter products based on search term (only used in select mode)
+const filteredProducts = products.filter(product =>
+product.name.toLowerCase().includes(searchTerm.toLowerCase())
+);
+// Handler for manual product submission
+const handleManualSubmit = async (e) => {
+e.preventDefault();
+setLoading(true);
+try {
+// Prepare new product data; tag it as manually added
+const newProdData = {
+...newProduct,
+price: parseFloat(newProduct.price),
+available: true,
+manuallyAdded: true
+};
+// Add the product to Firestore
+const docRef = await addDoc(collection(firestore, 'products'), newProdData);
+const createdProduct = { id: docRef.id, ...newProdData };
+// Pass the new product to the parent so it can be added to the order
+onProductSelect(createdProduct);
+// Reset the manual form and mode
+setNewProduct({ name: '', code: '', price: '' });
+setMode('select');
+} catch (error) {
+console.error("Error adding new product", error);
+} finally {
+setLoading(false);
+}
+};
+return (
+<Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+<DialogTitle>
+{mode === 'select' ? 'Ajouter un produit' : 'Ajouter un produit manuellement'}
+</DialogTitle>
+<DialogContent>
+{mode === 'select' ? (
+<>
+<TextField
+label="Rechercher"
+variant="outlined"
+fullWidth
+margin="normal"
+value={searchTerm}
+onChange={(e) => setSearchTerm(e.target.value)}
+/>
+<List>
+{filteredProducts.map(product => (
+<ListItem
+button
+key={product.id}
+onClick={() => onProductSelect(product)}
+>
+<ListItemText
+primary={product.name}
+secondary={`Prix: $${parseFloat(product.price).toFixed(2)}`}
+/>
+</ListItem>
+))}
+</List>
+</>
+) : (
+// Manual entry form
+<form onSubmit={handleManualSubmit}>
+<TextField
+label="Nom du produit"
+variant="outlined"
+fullWidth
+margin="normal"
+value={newProduct.name}
+onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+required
+/>
+<TextField
+label="Code du produit"
+variant="outlined"
+fullWidth
+margin="normal"
+value={newProduct.code}
+onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
+required
+/>
+<TextField
+label="Prix"
+variant="outlined"
+fullWidth
+margin="normal"
+type="number"
+value={newProduct.price}
+onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+required
+/>
+<Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+<Button onClick={() => setMode('select')} color="primary">
+Retour
+</Button>
+<Button type="submit" variant="contained" color="primary" disabled={loading}>
+{loading ? "En cours..." : "Ajouter"}
+</Button>
+</Box>
+</form>
+)}
+</DialogContent>
+{/* Only show these DialogActions in 'select' mode */}
+{mode === 'select' && (
+<DialogActions>
+<Button onClick={() => setMode('manual')} variant="contained" color="primary">
+Ajouter un produit manuellement
+</Button>
+<Button onClick={onClose}>Annuler</Button>
+</DialogActions>
+)}
+</Dialog>
+);
+}
+
+
+
 # ** File: src/components/OrderHistory.js **
-// src/components/OrderHistory.js
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { firestore } from '../firebase';
@@ -321,8 +531,10 @@ mb: 1
 <Box sx={{ width: 80, textAlign: 'right' }}>Quantity</Box>
 <Box sx={{ width: 80, textAlign: 'right' }}>Price</Box>
 </Box>
-{/* Render each item */}
-{order.items.map(item => (
+{/* Render each item (sorted alphabetically by name) */}
+{[...order.items]
+.sort((a, b) => a.name.localeCompare(b.name))
+.map(item => (
 <Box key={item.id} sx={{ mb: 1 }}>
 <Box sx={{
 display: 'flex',
@@ -492,7 +704,7 @@ export default NoTag;
 
 
 
-# ** File: src/components/DeliveryOrderCard.js **
+# ** File: src/components/DeliveredOrderCard.js **
 import React, { useState, useEffect } from 'react';
 import { Paper, Typography, Box, Button } from '@mui/material';
 import { collection, query, where, getDocs } from 'firebase/firestore';
@@ -653,8 +865,7 @@ serverTimestamp
 } from 'firebase/firestore';
 import { firestore, storage } from '../firebase';
 import SignatureCanvas from 'react-signature-canvas';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import {
 Box,
 Typography,
@@ -662,168 +873,18 @@ Paper,
 Button,
 TextField,
 FormControlLabel,
-Checkbox
+Checkbox,
+Dialog,
+DialogTitle,
+DialogContent,
+DialogActions
 } from '@mui/material';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import Logo from '../logo.png';
-import DeliveredOrderCard from './DeliveryOrderCard';
-// Helper to compute week code (e.g., "07-2025")
-function getWeekCode(date) {
-const target = new Date(date);
-const dayNr = (target.getDay() + 6) % 7; // Monday=0
-target.setDate(target.getDate() - dayNr + 3);
-const firstThursday = new Date(target.getFullYear(), 0, 4);
-const diff = target - firstThursday;
-const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
-return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
-}
-// Generate multi-page PDF of aggregated items
-function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierLabel) {
-const doc = new jsPDF();
-doc.setFontSize(16);
-doc.text(`Aggregated Products - Week ${currentWeek}`, 14, 20);
-doc.setFontSize(12);
-if (supplierLabel) {
-doc.text(`Supplier: ${supplierLabel}`, 14, 30);
-}
-const columns = [
-{ header: 'ID - Name', dataKey: 'name' },
-{ header: 'Qty', dataKey: 'quantity' },
-{ header: 'Price', dataKey: 'price' },
-{ header: 'Line Total', dataKey: 'total' }
-];
-const rows = aggregatedItemsArray.map(item => ({
-name: `ID: ${item.id} - ${item.name}`,
-quantity: item.quantity,
-price: `$${parseFloat(item.price).toFixed(2)}`,
-total: `$${(item.price * item.quantity).toFixed(2)}`
-}));
-autoTable(doc, {
-startY: 40,
-head: [columns.map(col => col.header)],
-body: rows.map(row => columns.map(col => row[col.dataKey])),
-styles: { fontSize: 10 },
-headStyles: { fillColor: [41, 128, 185] },
-margin: { horizontal: 14 }
-});
-doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierLabel}` : ''}.pdf`);
-}
-/**
-* Component for an active order (not delivered yet).
-* Displays items, plus company info from `res_partner`.
-*/
-const OrderCard = ({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChange }) => {
-const [address, setAddress] = useState(null);
-const [companyName, setCompanyName] = useState('');
-useEffect(() => {
-const fetchPartnerInfo = async () => {
-try {
-const partnersRef = collection(firestore, 'res_partner');
-const qPartners = query(partnersRef, where('email', '==', order.email));
-const querySnapshot = await getDocs(qPartners);
-if (!querySnapshot.empty) {
-const partnerData = querySnapshot.docs[0].data();
-setAddress(partnerData.contact_address_complete || '');
-setCompanyName(partnerData.company_name || '');
-}
-} catch (error) {
-console.error('Error fetching partner info', error);
-}
-};
-fetchPartnerInfo();
-}, [order.email]);
-return (
-<Paper sx={{ mb: 2, p: 2 }}>
-<Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-Order ID: {order.id}
-</Typography>
-{/* Display partner info (company, email, address) */}
-{companyName && (
-<Typography variant="body2" sx={{ mb: 1 }}>
-Company: {companyName}
-</Typography>
-)}
-<Typography variant="body2" sx={{ mb: 1 }}>
-Email: {order.email}
-</Typography>
-{address && (
-<Typography variant="body2" sx={{ mb: 1 }}>
-Address: {address}
-</Typography>
-)}
-<Typography variant="body2">
-Delivery Status: {order.deliveryStatus || 'N/A'}
-</Typography>
-<Box sx={{ mt: 2 }}>
-{order.items?.map((item) => (
-<Box key={item.id} sx={{ mb: 1 }}>
-<Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-{/* Item name */}
-<Typography sx={{ flex: 1 }}>{item.name}</Typography>
-{/* New supplier column */}
-<Typography sx={{ flex: 1 }}>
-{item.supplier || 'N/A'}
-</Typography>
-{/* Price */}
-<Typography sx={{ width: '80px', textAlign: 'right' }}>
-${parseFloat(item.price).toFixed(2)}
-</Typography>
-{/* Quantity */}
-<TextField
-type="number"
-size="small"
-value={item.quantity}
-onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
-sx={{ width: '60px', textAlign: 'right' }}
-inputProps={{
-style: { textAlign: 'right' },
-min: 0,
-inputMode: 'numeric',
-pattern: '[0-9]*'
-}}
-/>
-</Box>
-{item.comment && (
-<Typography variant="body2" sx={{ ml: 2, color: 'grey.600' }}>
-Comment: {item.comment}
-</Typography>
-)}
-</Box>
-))}
-</Box>
-<Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
-<Button
-variant="contained"
-onClick={() => onMarkDelivered(order.id)}
-disabled={!order.signature}
->
-Mark Delivered
-</Button>
-{order.signature ? (
-<Box
-sx={{
-border: '1px solid #ccc',
-p: 1,
-maxWidth: 200,
-maxHeight: 100,
-overflow: 'hidden'
-}}
->
-<img
-src={order.signature}
-alt="Signature"
-style={{ width: '100%', height: 'auto' }}
-/>
-</Box>
-) : (
-<Button variant="outlined" onClick={() => onOpenSignaturePad(order.id)}>
-Capture Signature
-</Button>
-)}
-</Box>
-</Paper>
-);
-};
+import DeliveredOrderCard from './DeliveredOrderCard';
+import AddProductDialog from './AddProductDialog';
+import OrderCard from './OrderCard';
+import { getWeekCode } from '../utils/dateUtils';
+import { exportAggregatedPDF } from '../utils/pdfUtils';
 function DeliveryDashboard({ user }) {
 const [orders, setOrders] = useState([]);
 const [sigPadOpen, setSigPadOpen] = useState(null); // ID of order being signed
@@ -832,6 +893,21 @@ const printRef = useRef(null);
 const currentWeek = getWeekCode(new Date());
 // For supplier invoices
 const [supplierInvoiceUrl, setSupplierInvoiceUrl] = useState({});
+// -----------------------------
+// Existing "Add Product" feature
+// -----------------------------
+const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
+const [selectedOrderForProductAddition, setSelectedOrderForProductAddition] = useState(null);
+// -----------------------------
+// New "Replace Product" feature
+// -----------------------------
+// We'll reuse AddProductDialog in "replace" mode, then show a confirm dialog.
+const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
+const [oldProductIdToReplace, setOldProductIdToReplace] = useState(null);
+// A second dialog to confirm the replacement
+const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
+const [pendingNewProduct, setPendingNewProduct] = useState(null);
+const [ordersAffectedCount, setOrdersAffectedCount] = useState(0);
 // 1) Fetch orders for current week
 useEffect(() => {
 const wc = getWeekCode(new Date());
@@ -955,6 +1031,9 @@ console.error('Error creating checklist document', error);
 }
 };
 // 5) Active vs. delivered orders
+const activeOrders = orders.filter(order => order.deliveryStatus !== 'delivered');
+const deliveredOrders = orders.filter(order => order.deliveryStatus === 'delivered');
+// 7) Quantity update for order items
 const handleQuantityChange = async (orderId, itemId, newQty) => {
 const order = orders.find(o => o.id === orderId);
 if (!order) return;
@@ -973,6 +1052,7 @@ updatedAt: serverTimestamp()
 console.error('Error updating quantity', err);
 }
 };
+// 8) Mark order as delivered
 const markAsDelivered = async (orderId) => {
 try {
 await updateDoc(doc(firestore, 'orders', orderId), {
@@ -1004,16 +1084,159 @@ setSigPadOpen(null);
 console.error('Error saving signature', err);
 }
 };
-// 7) Separate orders
-const activeOrders = orders.filter(order => order.deliveryStatus !== 'delivered');
-const deliveredOrders = orders.filter(order => order.deliveryStatus === 'delivered');
-// 8) PDF Export per supplier
+// -----------------------------
+// Existing "Add Product to Order" Feature
+// -----------------------------
+const handleOpenAddProduct = (orderId) => {
+setSelectedOrderForProductAddition(orderId);
+setAddProductDialogOpen(true);
+};
+const handleCloseAddProduct = () => {
+setAddProductDialogOpen(false);
+setSelectedOrderForProductAddition(null);
+};
+const handleAddProductToOrder = async (orderId, product) => {
+const order = orders.find(o => o.id === orderId);
+if (!order) return;
+let newItems = [];
+let found = false;
+if (order.items) {
+newItems = order.items.map(item => {
+if (item.id === product.id) {
+found = true;
+return { ...item, quantity: item.quantity + 1 };
+}
+return item;
+});
+} else {
+newItems = [];
+}
+if (!found) {
+newItems.push({ ...product, quantity: 1 });
+}
+try {
+await updateDoc(doc(firestore, 'orders', orderId), {
+items: newItems,
+updatedAt: serverTimestamp()
+});
+console.log(`Product ${product.name} added to order ${orderId}`);
+} catch (error) {
+console.error('Error adding product to order', error);
+}
+};
+// -----------------------------
+// New "Replace Product" Feature
+// -----------------------------
+const handleOpenReplaceDialog = (oldProductId) => {
+setOldProductIdToReplace(oldProductId);
+setReplaceDialogOpen(true);
+};
+const handleCloseReplaceDialog = () => {
+setReplaceDialogOpen(false);
+setOldProductIdToReplace(null);
+};
+// Step 1: user picks new product in AddProductDialog -> confirm replacement
+const handleStartReplaceConfirmation = (newProduct) => {
+if (!oldProductIdToReplace) return;
+// Count how many orders would be changed
+let count = 0;
+orders.forEach(order => {
+const items = order.items || [];
+if (items.some(item => item.id === oldProductIdToReplace)) {
+count++;
+}
+});
+setOrdersAffectedCount(count);
+// We'll store newProduct in state, then show the confirmation dialog
+setPendingNewProduct(newProduct);
+// Close the replace product selection dialog
+setReplaceDialogOpen(false);
+// Open the final confirm dialog
+setReplaceConfirmOpen(true);
+};
+// Step 2: If user confirms, do the actual replacement
+const handleConfirmReplace = () => {
+if (!pendingNewProduct || !oldProductIdToReplace) return;
+handleReplaceProductInAllOrders(pendingNewProduct);
+setReplaceConfirmOpen(false);
+setPendingNewProduct(null);
+};
+// Step 2b: user cancels
+const handleCancelReplace = () => {
+setReplaceConfirmOpen(false);
+setPendingNewProduct(null);
+setOldProductIdToReplace(null);
+};
+/**
+* Actually replaces oldProductIdToReplace with newProduct across all relevant orders,
+* then re-aggregates local data so UI updates.
+*/
+const handleReplaceProductInAllOrders = async (newProduct) => {
+let updatedCount = 0;
+const newOrdersState = orders.map(order => {
+const items = order.items || [];
+let changed = false;
+const updatedItems = items.map(item => {
+if (item.id === oldProductIdToReplace) {
+changed = true;
+return {
+...item,
+id: newProduct.id,
+name: newProduct.name,
+price: newProduct.price,
+supplier: newProduct.supplier || 'Unknown'
+};
+}
+return item;
+});
+if (changed) {
+updatedCount++;
+// Update doc in Firestore
+updateDoc(doc(firestore, 'orders', order.id), {
+items: updatedItems,
+updatedAt: serverTimestamp()
+}).catch(err => {
+console.error(`Error updating order ${order.id}`, err);
+});
+return { ...order, items: updatedItems };
+}
+return order;
+});
+console.log(`Replaced product ${oldProductIdToReplace} with ${newProduct.id} in ${updatedCount} orders.`);
+// Update local orders state
+setOrders(newOrdersState);
+// Re-aggregate
+const reAggregated = {};
+newOrdersState.forEach(order => {
+if (order.items) {
+order.items.forEach(item => {
+const supplier = item.supplier || 'Unknown';
+if (!reAggregated[supplier]) {
+reAggregated[supplier] = {};
+}
+if (!reAggregated[supplier][item.id]) {
+reAggregated[supplier][item.id] = { ...item };
+} else {
+reAggregated[supplier][item.id].quantity += item.quantity;
+}
+});
+}
+});
+// Overwrite aggregatedBySupplier
+Object.keys(aggregatedBySupplier).forEach(k => delete aggregatedBySupplier[k]);
+Object.keys(reAggregated).forEach(sup => {
+aggregatedBySupplier[sup] = reAggregated[sup];
+});
+// Clear old product ID
+setOldProductIdToReplace(null);
+};
+// 9) PDF Export per supplier
 const handleExportPDF = (supplier) => {
 const itemsObj = aggregatedBySupplier[supplier] || {};
 const itemsArray = Object.values(itemsObj);
 exportAggregatedPDF(itemsArray, currentWeek, supplier);
 };
-// 9) Auto-upload invoices
+// 10) Auto-upload invoices
 const handleInvoiceFileChangeAndUpload = async (supplier, file) => {
 try {
 const invoiceRef = ref(storage, `invoices/${currentWeek}/${supplier}/${file.name}`);
@@ -1080,10 +1303,9 @@ sx={{ mb: 2 }}
 >
 Export PDF
 </Button>
-{/* Image upload area - auto-upload, small preview */}
+{/* Image upload area */}
 <Box sx={{ mb: 2 }}>
 {supplierInvoiceUrl[supplier] ? (
-// If there's already an uploaded invoice, show a small preview
 <Box
 onClick={() => {
 document.getElementById(`invoice-input-${supplier}`).click();
@@ -1100,7 +1322,6 @@ Click to replace invoice
 </Typography>
 </Box>
 ) : (
-// Otherwise, prompt to upload
 <Typography
 variant="body2"
 color="primary"
@@ -1112,7 +1333,6 @@ document.getElementById(`invoice-input-${supplier}`).click();
 Click to upload invoice
 </Typography>
 )}
-{/* Hidden file input triggers immediate upload */}
 <input
 id={`invoice-input-${supplier}`}
 type="file"
@@ -1121,7 +1341,6 @@ accept="image/*"
 onChange={(e) => {
 if (e.target.files?.[0]) {
 handleInvoiceFileChangeAndUpload(supplier, e.target.files[0]);
-// Reset file input so user can re-select the same file if needed
 e.target.value = null;
 }
 }}
@@ -1216,6 +1435,14 @@ pattern: '[0-9]*'
 <Typography sx={{ width: '80px', textAlign: 'right' }}>
 ${parseFloat(item.price).toFixed(2)}
 </Typography>
+{/* NEW: Replace button */}
+<Button
+variant="outlined"
+size="small"
+onClick={() => handleOpenReplaceDialog(item.id)}
+>
+Replace
+</Button>
 </Box>
 ))}
 </Paper>
@@ -1237,6 +1464,7 @@ order={order}
 onMarkDelivered={markAsDelivered}
 onOpenSignaturePad={openSignaturePad}
 onQuantityChange={handleQuantityChange}
+onAddProduct={handleOpenAddProduct}
 />
 ))
 )}
@@ -1290,6 +1518,41 @@ Cancel
 </Box>
 </Box>
 )}
+{/* Existing "Add Product" Dialog */}
+<AddProductDialog
+open={addProductDialogOpen}
+onClose={handleCloseAddProduct}
+onProductSelect={(product) => {
+handleAddProductToOrder(selectedOrderForProductAddition, product);
+handleCloseAddProduct();
+}}
+/>
+{/* NEW "Replace Product" Dialog (step 1: pick product) */}
+<AddProductDialog
+open={replaceDialogOpen}
+onClose={handleCloseReplaceDialog}
+onProductSelect={(product) => {
+handleStartReplaceConfirmation(product);
+}}
+/>
+{/* Confirmation Dialog (step 2: confirm) */}
+<Dialog open={replaceConfirmOpen} onClose={handleCancelReplace}>
+<DialogTitle>Confirm Product Replacement</DialogTitle>
+<DialogContent>
+<Typography>
+You are about to replace product <strong>{oldProductIdToReplace}</strong> in{' '}
+<strong>{ordersAffectedCount}</strong> order(s). Continue?
+</Typography>
+</DialogContent>
+<DialogActions>
+<Button onClick={handleCancelReplace} color="secondary">
+Cancel
+</Button>
+<Button onClick={handleConfirmReplace} variant="contained" color="primary">
+Confirm
+</Button>
+</DialogActions>
+</Dialog>
 </Box>
 );
 }
@@ -1470,8 +1733,132 @@ export default VirtualizedProductsTable;
 
 
 
+# ** File: src/components/OrderCard.js **
+// src/components/OrderCard.js
+import React, { useState, useEffect } from 'react';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { firestore } from '../firebase';
+import {
+Paper,
+Typography,
+Box,
+TextField,
+Button
+} from '@mui/material';
+export default function OrderCard({ order, onMarkDelivered, onOpenSignaturePad, onQuantityChange, onAddProduct }) {
+const [address, setAddress] = useState(null);
+const [companyName, setCompanyName] = useState('');
+useEffect(() => {
+const fetchPartnerInfo = async () => {
+try {
+const partnersRef = collection(firestore, 'res_partner');
+const qPartners = query(partnersRef, where('email', '==', order.email));
+const querySnapshot = await getDocs(qPartners);
+if (!querySnapshot.empty) {
+const partnerData = querySnapshot.docs[0].data();
+setAddress(partnerData.contact_address_complete || '');
+setCompanyName(partnerData.company_name || '');
+}
+} catch (error) {
+console.error('Error fetching partner info', error);
+}
+};
+fetchPartnerInfo();
+}, [order.email]);
+return (
+<Paper sx={{ mb: 2, p: 2 }}>
+<Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+Order ID: {order.id}
+</Typography>
+{companyName && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Company: {companyName}
+</Typography>
+)}
+<Typography variant="body2" sx={{ mb: 1 }}>
+Email: {order.email}
+</Typography>
+{address && (
+<Typography variant="body2" sx={{ mb: 1 }}>
+Address: {address}
+</Typography>
+)}
+<Typography variant="body2">
+Delivery Status: {order.deliveryStatus || 'N/A'}
+</Typography>
+<Box sx={{ mt: 2 }}>
+{order.items?.map((item) => (
+<Box key={item.id} sx={{ mb: 1 }}>
+<Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+<Typography sx={{ flex: 1 }}>{item.name}</Typography>
+<Typography sx={{ flex: 1 }}>
+{item.supplier || 'N/A'}
+</Typography>
+<Typography sx={{ width: '80px', textAlign: 'right' }}>
+${parseFloat(item.price).toFixed(2)}
+</Typography>
+<TextField
+type="number"
+size="small"
+value={item.quantity}
+onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
+sx={{ width: '60px', textAlign: 'right' }}
+inputProps={{
+style: { textAlign: 'right' },
+min: 0,
+inputMode: 'numeric',
+pattern: '[0-9]*'
+}}
+/>
+</Box>
+{item.comment && (
+<Typography variant="body2" sx={{ ml: 2, color: 'grey.600' }}>
+Comment: {item.comment}
+</Typography>
+)}
+</Box>
+))}
+</Box>
+<Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center' }}>
+<Button
+variant="contained"
+onClick={() => onMarkDelivered(order.id)}
+disabled={!order.signature}
+>
+Mark Delivered
+</Button>
+<Button variant="contained" onClick={() => onAddProduct(order.id)}>
+Ajouter un produit
+</Button>
+{order.signature ? (
+<Box
+sx={{
+border: '1px solid #ccc',
+p: 1,
+maxWidth: 200,
+maxHeight: 100,
+overflow: 'hidden'
+}}
+>
+<img
+src={order.signature}
+alt="Signature"
+style={{ width: '100%', height: 'auto' }}
+/>
+</Box>
+) : (
+<Button variant="outlined" onClick={() => onOpenSignaturePad(order.id)}>
+Capture Signature
+</Button>
+)}
+</Box>
+</Paper>
+);
+}
+
+
+
 # ** File: src/components/Basket.js **
-// src/components/Basket.js
 import React, { useState, useEffect } from 'react';
 import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/material';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
@@ -1528,7 +1915,9 @@ boxShadow: 3,
 <Typography>Aucun article dans le panier</Typography>
 ) : (
 <>
-{basket.map((item) => {
+{[...basket]
+.sort((a, b) => a.name.localeCompare(b.name))
+.map((item) => {
 const lineTotal = (item.price * item.quantity).toFixed(2);
 return (
 <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', mb: 1, gap: 1 }}>
@@ -1594,7 +1983,6 @@ export default Basket;
 
 
 # ** File: src/components/ProductsPage.js **
-// src/components/ProductsPage.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
 collection,
@@ -1827,6 +2215,8 @@ const matchesSupplier = selectedSupplier ? product.supplier === selectedSupplier
 const matchesBio = bioOnly ? product.bio === true : true;
 return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
 });
+// Sort products alphabetically by name
+const sortedFilteredProducts = [...filteredProducts].sort((a, b) => a.name.localeCompare(b.name));
 console.log(
 `[ProductsPage] render: searchTerm="${searchTerm}", selectedCategory="${selectedCategory}", selectedSupplier="${selectedSupplier}", bioOnly=${bioOnly}, totalProducts=${products.length}, filteredProducts=${filteredProducts.length}`
 );
@@ -1857,17 +2247,8 @@ Voir l'historique des commandes
 <Button variant="outlined" color="secondary" onClick={handleLogout} sx={{ mt: 1 }}>
 Log Out
 </Button>
-{/*
-Conditionally render a button to go to /delivery if the user has delivery access.
-(Make sure to pass isDelivery as a prop from App.js.)
-*/}
 {isDelivery && (
-<Button
-variant="outlined"
-component={Link}
-to="/delivery"
-sx={{ mt: 1, ml: 1 }}
->
+<Button variant="outlined" component={Link} to="/delivery" sx={{ mt: 1, ml: 1 }}>
 Delivery Dashboard
 </Button>
 )}
@@ -1933,7 +2314,7 @@ label="Bio seulement"
 </Box>
 </Box>
 <Box className="table-container">
-<VirtualizedProductsTable products={filteredProducts} addToBasket={addToBasket} />
+<VirtualizedProductsTable products={sortedFilteredProducts} addToBasket={addToBasket} />
 </Box>
 <Basket
 basket={basket}
@@ -1944,7 +2325,6 @@ saveOrder={saveOrder}
 isOrderAllowed={isOrderAllowed}
 />
 </Box>
-{/* Panier dupliqué si nécessaire en bas */}
 <Basket
 basket={basket}
 updateBasketItem={updateBasketItem}
