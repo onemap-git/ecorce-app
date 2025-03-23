@@ -1,9 +1,15 @@
 // src/components/DeliveryDashboard.js
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
+  collection,
+  query,
+  where,
+  onSnapshot,
   updateDoc,
   setDoc,
   doc,
+  getDoc,
+  getDocs,
   serverTimestamp
 } from 'firebase/firestore';
 import { firestore, storage } from '../firebase';
@@ -33,15 +39,15 @@ import OrderCard from './OrderCard';
 import { getWeekCode } from '../utils/dateUtils';
 
 /**
- * A new dialog that shows which orders contain the old product,
- * allowing the user to select which orders get replaced.
+ * Dialog pour sélectionner les commandes qui contiennent l’ancien produit.
+ * L’utilisateur peut cocher celles à remplacer.
  */
 function ReplaceOrdersSelectionDialog({
   open,
   ordersForReplacement,
   selectedOrders,
   setSelectedOrders,
-  oldProductIdToReplace,   // <-- We need to know which product ID we are showing quantity for
+  oldProductIdToReplace, // Pour afficher la quantité de l’ancien produit
   onClose,
   onNext
 }) {
@@ -57,16 +63,16 @@ function ReplaceOrdersSelectionDialog({
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>Select Orders to Replace</DialogTitle>
+      <DialogTitle>Sélectionner les commandes à remplacer</DialogTitle>
       <DialogContent dividers>
         <Typography variant="body2" sx={{ mb: 2 }}>
-          The following orders contain the old product. Check which orders should have it replaced.
+          Les commandes suivantes contiennent l'ancien produit. Sélectionnez celles où vous souhaitez le remplacer.
         </Typography>
         {ordersForReplacement.length === 0 ? (
-          <Typography>No orders found that contain the old product.</Typography>
+          <Typography>Aucune commande ne contient l'ancien produit.</Typography>
         ) : (
           ordersForReplacement.map((order) => {
-            // Find the item in this order that matches oldProductIdToReplace
+            // Trouver l’item qui correspond à l’ancien produit
             const matchingItem = order.items.find(
               (item) => item.id === oldProductIdToReplace
             );
@@ -81,8 +87,7 @@ function ReplaceOrdersSelectionDialog({
                       onChange={() => handleToggleOrder(order.id)}
                     />
                   }
-                  // We add the quantity to the label
-                  label={`Order ID: ${order.id} | ${order.email || ''} | Qty: ${quantity}`}
+                  label={`ID de commande : ${order.id} | ${order.email || ''} | Qté : ${quantity}`}
                 />
               </Box>
             );
@@ -91,7 +96,7 @@ function ReplaceOrdersSelectionDialog({
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose} color="secondary">
-          Cancel
+          Annuler
         </Button>
         <Button
           onClick={onNext}
@@ -99,7 +104,7 @@ function ReplaceOrdersSelectionDialog({
           color="primary"
           disabled={ordersForReplacement.length === 0}
         >
-          Next
+          Suivant
         </Button>
       </DialogActions>
     </Dialog>
@@ -107,53 +112,138 @@ function ReplaceOrdersSelectionDialog({
 }
 
 export default function DeliveryDashboard({ user }) {
+  // Récupération via le hook d’agrégation
   const { orders, aggregatedBySupplier, supplierInvoiceUrl, currentWeek } = useDeliveryAggregation();
 
-  // Signature pad
+  // --------------------------------------------------
+  //  Signature pad
+  // --------------------------------------------------
   const [sigPadOpen, setSigPadOpen] = useState(null);
   const sigPadRef = useRef(null);
 
-  // Invoices
+  // --------------------------------------------------
+  //  Factures fournisseurs (invoices)
+  // --------------------------------------------------
   const [supplierInvoiceUrlState, setSupplierInvoiceUrlState] = useState(supplierInvoiceUrl);
 
-  // Checklist
+  // --------------------------------------------------
+  //  Checklist pour “collected”, “collectedQuantity”, “newPrice”
+  // --------------------------------------------------
   const [checklist, setChecklist] = useState({});
 
-  // "Add Product" dialog
+  // Charger le checklist depuis Firestore (comme dans l'ancienne version)
+  useEffect(() => {
+    const wc = getWeekCode(new Date());
+    const checklistRef = collection(firestore, 'delivery_checklist');
+    const qC = query(checklistRef, where('weekCode', '==', wc));
+    const unsub = onSnapshot(qC, (snapshot) => {
+      const data = {};
+      snapshot.docs.forEach((docSnap) => {
+        const d = docSnap.data();
+        data[d.productId] = { id: docSnap.id, ...d };
+      });
+      setChecklist(data);
+    });
+    return () => unsub();
+  }, []);
+
+  // Activer / désactiver “collected” pour un produit
+  const toggleCollected = async (productId) => {
+    const wc = getWeekCode(new Date());
+    if (checklist[productId]) {
+      // Inverse la valeur “collected”
+      const newStatus = !checklist[productId].collected;
+      try {
+        await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
+          collected: newStatus,
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Erreur lors de la mise à jour du checklist", error);
+      }
+    } else {
+      // Crée un nouveau document checklist
+      try {
+        const newDocRef = doc(collection(firestore, 'delivery_checklist'));
+        await setDoc(newDocRef, {
+          weekCode: wc,
+          productId,
+          collected: true,
+          collectedQuantity: 0,
+          newPrice: 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Erreur lors de la création du document checklist", error);
+      }
+    }
+  };
+
+  // Mettre à jour un champ du checklist (collectedQuantity ou newPrice)
+  const updateChecklistField = async (productId, field, value) => {
+    const wc = getWeekCode(new Date());
+    const numericValue = parseFloat(value) || 0;
+    if (checklist[productId]) {
+      // Mettre à jour un doc existant
+      try {
+        await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
+          [field]: numericValue,
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Erreur lors de la mise à jour d'un champ du checklist", error);
+      }
+    } else {
+      // Créer un nouveau doc si inexistant
+      try {
+        const newDocRef = doc(collection(firestore, 'delivery_checklist'));
+        await setDoc(newDocRef, {
+          weekCode: wc,
+          productId,
+          collected: false,
+          collectedQuantity: field === 'collectedQuantity' ? numericValue : 0,
+          newPrice: field === 'newPrice' ? numericValue : 0,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp()
+        });
+      } catch (error) {
+        console.error("Erreur lors de la création du document checklist", error);
+      }
+    }
+  };
+
+  // --------------------------------------------------
+  //  "Add Product" dialog
+  // --------------------------------------------------
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
   const [selectedOrderForProductAddition, setSelectedOrderForProductAddition] = useState(null);
 
-  // Replace Feature
+  // --------------------------------------------------
+  //  "Replace Product" feature
+  // --------------------------------------------------
   const [replaceDialogOpen, setReplaceDialogOpen] = useState(false);
   const [oldProductIdToReplace, setOldProductIdToReplace] = useState(null);
 
-  // Step 2: user picks new product -> we open a selection dialog
+  // Step 2: user picks new product
   const [pendingNewProduct, setPendingNewProduct] = useState(null);
 
-  // The new "Replace Orders Selection" dialog
+  // Orders selection dialog
   const [replaceOrdersSelectionOpen, setReplaceOrdersSelectionOpen] = useState(false);
   const [ordersForReplacement, setOrdersForReplacement] = useState([]);
   const [selectedOrdersForReplacement, setSelectedOrdersForReplacement] = useState([]);
 
-  // The final confirmation
+  // Final confirm
   const [replaceConfirmOpen, setReplaceConfirmOpen] = useState(false);
   const [ordersAffectedCount, setOrdersAffectedCount] = useState(0);
 
-  // Derived orders
+  // --------------------------------------------------
+  //  Gestion des commandes actives / livrées
+  // --------------------------------------------------
   const activeOrders = orders.filter(o => o.deliveryStatus !== 'delivered');
   const deliveredOrders = orders.filter(o => o.deliveryStatus === 'delivered');
   const sortedActiveOrders = [...activeOrders].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
   const sortedDeliveredOrders = [...deliveredOrders].sort((a, b) => (a.email || '').localeCompare(b.email || ''));
-
-  // --------------------------------------------------
-  //  Checklist methods (example placeholders)
-  // --------------------------------------------------
-  const toggleCollected = async (productId) => {
-    // your existing logic...
-  };
-  const updateChecklistField = async (productId, field, value) => {
-    // your existing logic...
-  };
 
   // --------------------------------------------------
   //  Invoices
@@ -166,8 +256,8 @@ export default function DeliveryDashboard({ user }) {
         'state_changed',
         () => {},
         (error) => {
-          console.error('Upload error:', error);
-          alert('Error uploading invoice');
+          console.error("Erreur lors du téléversement de la facture :", error);
+          alert("Erreur lors du téléversement de la facture");
         },
         async () => {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
@@ -188,22 +278,47 @@ export default function DeliveryDashboard({ user }) {
         }
       );
     } catch (err) {
-      console.error('Error uploading invoice', err);
+      console.error("Erreur lors du téléversement de la facture", err);
     }
   };
 
   // --------------------------------------------------
   //  Order item modifications
   // --------------------------------------------------
+  // Mettre à jour la quantité d’un item dans une commande
   const handleQuantityChange = async (orderId, itemId, newQty) => {
-    // your existing logic
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const updatedItems = (order.items || []).map(item => {
+      if (item.id === itemId) {
+        return { ...item, quantity: parseInt(newQty, 10) || 0 };
+      }
+      return item;
+    });
+    try {
+      await updateDoc(doc(firestore, 'orders', orderId), {
+        items: updatedItems,
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Erreur lors de la mise à jour de la quantité", err);
+    }
   };
+
+  // Marquer une commande comme livrée
   const markAsDelivered = async (orderId) => {
-    // your existing logic
+    try {
+      await updateDoc(doc(firestore, 'orders', orderId), {
+        deliveryStatus: 'delivered',
+        deliveredAt: serverTimestamp()
+      });
+    } catch (err) {
+      console.error("Erreur lors du marquage de la commande comme livrée", err);
+    }
   };
 
   // --------------------------------------------------
-  //  Signature pad
+  //  Signature
   // --------------------------------------------------
   const openSignaturePad = (orderId) => {
     setSigPadOpen(orderId);
@@ -222,12 +337,12 @@ export default function DeliveryDashboard({ user }) {
       });
       setSigPadOpen(null);
     } catch (err) {
-      console.error('Error saving signature', err);
+      console.error("Erreur lors de l'enregistrement de la signature", err);
     }
   };
 
   // --------------------------------------------------
-  //  "Add Product to Order"
+  //  "Add Product" to Order
   // --------------------------------------------------
   const handleOpenAddProduct = (orderId) => {
     setSelectedOrderForProductAddition(orderId);
@@ -238,13 +353,42 @@ export default function DeliveryDashboard({ user }) {
     setSelectedOrderForProductAddition(null);
   };
   const handleAddProductToOrder = async (orderId, product) => {
-    // your existing logic
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    let newItems = [];
+    let found = false;
+
+    if (order.items) {
+      newItems = order.items.map(item => {
+        if (item.id === product.id) {
+          found = true;
+          return { ...item, quantity: item.quantity + 1 };
+        }
+        return item;
+      });
+    } else {
+      newItems = [];
+    }
+
+    if (!found) {
+      newItems.push({ ...product, quantity: 1 });
+    }
+
+    try {
+      await updateDoc(doc(firestore, 'orders', orderId), {
+        items: newItems,
+        updatedAt: serverTimestamp()
+      });
+      console.log(`Produit « ${product.name} » ajouté à la commande ${orderId}`);
+    } catch (error) {
+      console.error("Erreur lors de l'ajout du produit à la commande", error);
+    }
   };
 
   // --------------------------------------------------
   //  "Replace Product" Feature
   // --------------------------------------------------
-  // Step 1: user picks old product
+  // Étape 1 : Choisir le produit à remplacer
   const handleOpenReplaceDialog = (oldProductId) => {
     setOldProductIdToReplace(oldProductId);
     setReplaceDialogOpen(true);
@@ -254,42 +398,42 @@ export default function DeliveryDashboard({ user }) {
     setOldProductIdToReplace(null);
   };
 
-  // Step 2: user picks new product in AddProductDialog
+  // Étape 2 : Choisir le nouveau produit dans AddProductDialog
   const handleStartReplaceConfirmation = (newProduct) => {
     if (!oldProductIdToReplace) return;
 
-    // Identify which orders contain the old product
+    // Trouver les commandes contenant l'ancien produit
     const relevantOrders = orders.filter(order =>
       (order.items || []).some(item => item.id === oldProductIdToReplace)
     );
 
     setOrdersForReplacement(relevantOrders);
-    // By default, select them all
+    // Sélectionner toutes par défaut
     setSelectedOrdersForReplacement(relevantOrders.map(o => o.id));
 
     setPendingNewProduct(newProduct);
 
-    // close "replace product selection" dialog
+    // Fermer la boîte de dialogue de sélection
     setReplaceDialogOpen(false);
 
-    // open the new selection dialog
+    // Ouvrir la boîte de dialogue “ReplaceOrdersSelection”
     setReplaceOrdersSelectionOpen(true);
   };
 
-  // Step 3: user picks which orders get replaced
+  // Étape 3 : l’utilisateur coche les commandes à remplacer
   const handleCloseReplaceOrdersSelection = () => {
     setReplaceOrdersSelectionOpen(false);
     setPendingNewProduct(null);
     setOldProductIdToReplace(null);
   };
   const handleNextFromReplaceOrdersSelection = () => {
-    // We'll show the final confirm
+    // Calculer combien de commandes seront affectées
     setOrdersAffectedCount(selectedOrdersForReplacement.length);
     setReplaceOrdersSelectionOpen(false);
     setReplaceConfirmOpen(true);
   };
 
-  // Step 4: final confirm
+  // Étape 4 : confirmation finale
   const handleConfirmReplace = () => {
     if (!pendingNewProduct || !oldProductIdToReplace) return;
     handleReplaceProductInAllOrders(pendingNewProduct);
@@ -302,13 +446,12 @@ export default function DeliveryDashboard({ user }) {
     setOldProductIdToReplace(null);
   };
 
-  // Step 5: actual replacement in the selected orders
+  // Étape 5 : faire le remplacement dans toutes les commandes sélectionnées
   const handleReplaceProductInAllOrders = async (newProduct) => {
     let updatedCount = 0;
 
-    // Only replace in the selected orders
+    // Ne remplacer que dans les commandes sélectionnées
     const newOrdersState = orders.map(order => {
-      // If user did not select this order, skip
       if (!selectedOrdersForReplacement.includes(order.id)) {
         return order;
       }
@@ -330,12 +473,12 @@ export default function DeliveryDashboard({ user }) {
       });
       if (changed) {
         updatedCount++;
-        // Update doc in Firestore
+        // Mettre à jour Firestore
         updateDoc(doc(firestore, 'orders', order.id), {
           items: updatedItems,
           updatedAt: serverTimestamp()
         }).catch(err => {
-          console.error(`Error updating order ${order.id}`, err);
+          console.error(`Erreur lors de la mise à jour de la commande ${order.id}`, err);
         });
         return { ...order, items: updatedItems };
       }
@@ -343,27 +486,28 @@ export default function DeliveryDashboard({ user }) {
     });
 
     console.log(
-      `Replaced product ${oldProductIdToReplace} with ${newProduct.id} in ${updatedCount} selected orders.`
+      `Produit ${oldProductIdToReplace} remplacé par ${newProduct.id} dans ${updatedCount} commande(s) sélectionnée(s).`
     );
 
-    // Clear old product ID
+    // Réinitialiser
     setOldProductIdToReplace(null);
-
-    // Reset selection
     setOrdersForReplacement([]);
     setSelectedOrdersForReplacement([]);
   };
 
+  // --------------------------------------------------
+  //  Render
+  // --------------------------------------------------
   return (
     <Box sx={{ p: 2 }}>
       <Typography variant="h4" gutterBottom>
-        Delivery Dashboard
+        Tableau de bord des livraisons
       </Typography>
       <Typography variant="body1" gutterBottom>
-        Orders for week: {currentWeek}
+        Commandes pour la semaine : {currentWeek}
       </Typography>
 
-      {/* Aggregated Items */}
+      {/* Agrégation des articles */}
       <Box
         sx={{
           mt: 4,
@@ -375,7 +519,7 @@ export default function DeliveryDashboard({ user }) {
       >
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <Typography variant="h5" sx={{ ml: 2 }}>
-            Bons de commandes aux fournisseurs - Week {currentWeek}
+            Bons de commandes aux fournisseurs - Semaine {currentWeek}
           </Typography>
         </Box>
         <AggregatedTable
@@ -391,12 +535,12 @@ export default function DeliveryDashboard({ user }) {
       </Box>
 
       <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
-        Deliveries
+        Livraisons
       </Typography>
 
-      {/* ACTIVE ORDERS */}
+      {/* Commandes actives */}
       {sortedActiveOrders.length === 0 ? (
-        <Typography>No active orders for this week.</Typography>
+        <Typography>Aucune commande active pour cette semaine.</Typography>
       ) : (
         sortedActiveOrders.map(order => (
           <OrderCard
@@ -410,11 +554,11 @@ export default function DeliveryDashboard({ user }) {
         ))
       )}
 
-      {/* DELIVERED ORDERS */}
+      {/* Commandes livrées */}
       {sortedDeliveredOrders.length > 0 && (
         <>
           <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
-            Delivered Orders
+            Commandes livrées
           </Typography>
           {sortedDeliveredOrders.map(order => (
             <DeliveredOrderCard key={order.id} order={order} />
@@ -422,7 +566,7 @@ export default function DeliveryDashboard({ user }) {
         </>
       )}
 
-      {/* Signature Overlay */}
+      {/* Overlay de signature */}
       <SignatureOverlay
         open={!!sigPadOpen}
         sigPadRef={sigPadRef}
@@ -431,7 +575,7 @@ export default function DeliveryDashboard({ user }) {
         onCancel={() => setSigPadOpen(null)}
       />
 
-      {/* Existing "Add Product" Dialog */}
+      {/* "Add Product" Dialog existant */}
       <AddProductDialog
         open={addProductDialogOpen}
         onClose={handleCloseAddProduct}
@@ -441,7 +585,7 @@ export default function DeliveryDashboard({ user }) {
         }}
       />
 
-      {/* Step 1: Replace Product -> pick new product */}
+      {/* Étape 1 : choisir l’ancien produit à remplacer */}
       <AddProductDialog
         open={replaceDialogOpen}
         onClose={handleCloseReplaceDialog}
@@ -450,7 +594,7 @@ export default function DeliveryDashboard({ user }) {
         }}
       />
 
-      {/* Step 2: Show orders that have oldProductId, user picks which ones to replace */}
+      {/* Étape 2 : Sélection des commandes où remplacer */}
       <ReplaceOrdersSelectionDialog
         open={replaceOrdersSelectionOpen}
         ordersForReplacement={ordersForReplacement}
@@ -461,21 +605,21 @@ export default function DeliveryDashboard({ user }) {
         onNext={handleNextFromReplaceOrdersSelection}
       />
 
-      {/* Step 3: final confirm */}
+      {/* Étape 3 : confirmation finale */}
       <Dialog open={replaceConfirmOpen} onClose={handleCancelReplace}>
-        <DialogTitle>Confirm Product Replacement</DialogTitle>
+        <DialogTitle>Confirmer le remplacement du produit</DialogTitle>
         <DialogContent>
           <Typography>
-            You are about to replace product <strong>{oldProductIdToReplace}</strong> in{' '}
-            <strong>{ordersAffectedCount}</strong> selected order(s). Continue?
+            Vous êtes sur le point de remplacer le produit <strong>{oldProductIdToReplace}</strong> dans{' '}
+            <strong>{ordersAffectedCount}</strong> commande(s) sélectionnée(s). Continuer ?
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCancelReplace} color="secondary">
-            Cancel
+            Annuler
           </Button>
           <Button onClick={handleConfirmReplace} variant="contained" color="primary">
-            Confirm
+            Confirmer
           </Button>
         </DialogActions>
       </Dialog>

@@ -12,7 +12,6 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { firestore } from '../firebase';
-
 import { Link } from 'react-router-dom';
 import {
   Container,
@@ -20,16 +19,13 @@ import {
   Button,
   Box
 } from '@mui/material';
-
 import Logo from '../logo.svg';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
-
 // Import our FilterBar and ResponsiveProductsView:
 import FilterBar from './FilterBar';
 import ResponsiveProductsView from './ResponsiveProductsView';
 import Basket from './Basket';
-
 import { getWeekCode } from '../utils/dateUtils';
 
 function ProductsPage({ user, isDelivery }) {
@@ -47,10 +43,10 @@ function ProductsPage({ user, isDelivery }) {
 
   // For auto-saving
   const lastRemoteBasketRef = useRef([]);
-  
+
   // For restricting orders to certain days
   const today = new Date();
-  const allowedDays = [1, 2, 3]; // Monday, Tuesday, Wednesday
+  const allowedDays = [1, 2, 3]; // Monday=1, Tuesday=2, Wednesday=3
   // or set by environment
   const bypassOrderRestrictions = process.env.REACT_APP_BYPASS_ORDER_RESTRICTION === 'true';
   const isOrderAllowed = bypassOrderRestrictions || allowedDays.includes(today.getDay());
@@ -86,7 +82,6 @@ function ProductsPage({ user, isDelivery }) {
   useEffect(() => {
     const productsRef = collection(firestore, 'products');
     const q = query(productsRef, where('available', '==', true));
-
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setProducts(prods);
@@ -115,7 +110,6 @@ function ProductsPage({ user, isDelivery }) {
         const activeOrder = openOrders[0];
         const data = activeOrder.data();
         setActiveOrderId(activeOrder.id);
-
         const remoteItems = data.items || [];
         // If remote items differ from local basket, sync them
         if (JSON.stringify(remoteItems) !== JSON.stringify(basket)) {
@@ -253,17 +247,48 @@ function ProductsPage({ user, isDelivery }) {
 
   // Filter products based on the states
   const filteredProducts = products.filter(product => {
-    const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
-    const matchesSupplier = selectedSupplier ? product.supplier === selectedSupplier : true;
+    const matchesSearch = product.name
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory
+      ? product.category === selectedCategory
+      : true;
+    const matchesSupplier = selectedSupplier
+      ? product.supplier === selectedSupplier
+      : true;
     const matchesBio = bioOnly ? product.bio === true : true;
     return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
   });
 
-  // Sort them alphabetically by name
-  const sortedFilteredProducts = [...filteredProducts].sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
+  // ------------------------------------------------------------------
+  //  CUSTOM SORT: FRUITS -> LEGUMES -> everything else
+  // ------------------------------------------------------------------
+  const categoryPriority = {
+    FRUITS: 1,
+    LEGUMES: 2,
+  };
+
+  const sortedFilteredProducts = [...filteredProducts].sort((a, b) => {
+    const catA = (a.category || '').toUpperCase();
+    const catB = (b.category || '').toUpperCase();
+
+    const priorityA = categoryPriority[catA] || 999;  // 999 if not FRUITS or LEGUMES
+    const priorityB = categoryPriority[catB] || 999;
+
+    // First compare priority
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+
+    // If same priority, compare category alphabetically
+    const catComparison = catA.localeCompare(catB);
+    if (catComparison !== 0) {
+      return catComparison;
+    }
+
+    // If same category, compare name alphabetically
+    return (a.name || '').localeCompare(b.name || '');
+  });
 
   // ------------------------------------------------------------------
   //  Logout handler
@@ -290,14 +315,18 @@ function ProductsPage({ user, isDelivery }) {
             Voir l'historique des commandes
           </Button>
         </Box>
-
         <Box sx={{ textAlign: 'right' }}>
           {user && (
             <>
               <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
                 {user.email}
               </Typography>
-              <Button variant="outlined" color="secondary" onClick={handleLogout} sx={{ mt: 1 }}>
+              <Button
+                variant="outlined"
+                color="secondary"
+                onClick={handleLogout}
+                sx={{ mt: 1 }}
+              >
                 Log Out
               </Button>
               {isDelivery && (
