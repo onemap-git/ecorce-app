@@ -1,5 +1,5 @@
 # Combined source code for commit: 123
-# Generated on: 2025-03-23 09:56:25
+# Generated on: 2025-03-23 17:34:22
 
 
 
@@ -860,6 +860,7 @@ Cancel
 
 
 # ** File: src/components/OrderHistory.js **
+// src/components/OrderHistory.js
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { firestore } from '../firebase';
@@ -904,13 +905,20 @@ Back to Products
 {orders.length === 0 ? (
 <Typography sx={{ mt: 2 }}>No orders found.</Typography>
 ) : (
-orders.map(order => (
+orders.map(order => {
+// 1) Calculate total cost for each order
+const totalCost = (order.items || []).reduce(
+(acc, item) => acc + (item.price * item.quantity),
+0
+);
+return (
 <Paper key={order.id} sx={{ mb: 2, p: 2 }}>
 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
 Order ID: {order.id}
 </Typography>
 <Typography variant="body2">
-<strong>Date:</strong> {order.createdAt ? order.createdAt.toDate().toLocaleString() : 'N/A'}
+<strong>Date:</strong>{' '}
+{order.createdAt ? order.createdAt.toDate().toLocaleString() : 'N/A'}
 </Typography>
 {/* Status Chip */}
 {order.deliveryStatus && (
@@ -924,7 +932,8 @@ color={getStatusColor(order.deliveryStatus)}
 {/* If delivered, show delivery date */}
 {order.deliveryStatus === 'delivered' && (
 <Typography variant="body2">
-<strong>Delivery Date:</strong> {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
+<strong>Delivery Date:</strong>{' '}
+{order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
 </Typography>
 )}
 {/* Items table */}
@@ -933,29 +942,33 @@ color={getStatusColor(order.deliveryStatus)}
 Items:
 </Typography>
 {/* Table header */}
-<Box sx={{
+<Box
+sx={{
 display: 'flex',
 borderBottom: '1px solid #ccc',
 fontWeight: 'bold',
 pb: 1,
 mb: 1
-}}>
+}}
+>
 <Box sx={{ flex: 1 }}>ID</Box>
 <Box sx={{ flex: 2 }}>Name</Box>
 <Box sx={{ width: 80, textAlign: 'right' }}>Quantity</Box>
 <Box sx={{ width: 80, textAlign: 'right' }}>Price</Box>
 </Box>
 {/* Render each item (sorted alphabetically by name) */}
-{[...order.items]
+{[...(order.items || [])]
 .sort((a, b) => a.name.localeCompare(b.name))
 .map(item => (
 <Box key={item.id} sx={{ mb: 1 }}>
-<Box sx={{
+<Box
+sx={{
 display: 'flex',
 alignItems: 'center',
 py: 0.5,
 borderBottom: '1px dashed #eee'
-}}>
+}}
+>
 <Box sx={{ flex: 1 }}>{item.id}</Box>
 <Box sx={{ flex: 2 }}>{item.name}</Box>
 <Box sx={{ width: 80, textAlign: 'right' }}>{item.quantity}</Box>
@@ -986,8 +999,16 @@ sx={{ maxWidth: 200, border: '1px solid #ccc', p: 0.5, borderRadius: 1 }}
 />
 </Box>
 )}
+{/* 2) Show total cost for this order at the bottom */}
+<Typography
+variant="body2"
+sx={{ textAlign: 'right', mt: 2, fontWeight: 'bold' }}
+>
+Total: ${totalCost.toFixed(2)}
+</Typography>
 </Paper>
-))
+);
+})
 )}
 </Container>
 );
@@ -1065,6 +1086,7 @@ return (
 .map((supplier) => {
 const itemsObj = aggregatedBySupplier[supplier];
 const itemsArray = Object.values(itemsObj).sort((a, b) => a.name.localeCompare(b.name));
+const totalCost = itemsArray.reduce((acc, item) => acc + item.quantity * item.price, 0);
 const handleExportPDF = () => {
 exportAggregatedPDF(itemsArray, currentWeek, supplier);
 };
@@ -1076,30 +1098,23 @@ Supplier: {supplier}
 <Button variant="contained" onClick={handleExportPDF} sx={{ mb: 2 }}>
 Export PDF
 </Button>
-{/* Example of invoice image upload area */}
-<Box sx={{ mb: 2 }}>
-{/* ...unchanged invoice logic... */}
-</Box>
-{/* Responsive grid header */}
 <Box
 sx={{
 display: 'grid',
-// Use breakpoints to switch columns for small screens
 gridTemplateColumns: {
-xs: '1fr 1fr', // Only 2 columns on extra-small screens
-sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr', // Original columns on small+
+xs: '1fr 1fr',
+sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr',
 },
 gap: 1,
 mb: 1,
 fontWeight: 'bold',
 borderBottom: '1px solid #ccc',
 pb: 1,
-width: '100%'
+width: '100%',
 }}
 >
 <Typography>ID</Typography>
 <Typography>Name</Typography>
-{/* The next columns will be hidden on xs because we only have 2 columns on xs */}
 <Typography sx={{ display: { xs: 'none', sm: 'block' } }}>Qty</Typography>
 <Typography sx={{ display: { xs: 'none', sm: 'block' } }}>Coll.</Typography>
 <Typography sx={{ textAlign: 'center', display: { xs: 'none', sm: 'block' } }}>
@@ -1115,29 +1130,34 @@ Orig
 Action
 </Typography>
 </Box>
-{/* Items rows */}
-{itemsArray.map(item => (
+{itemsArray.map((item) => {
+const quantityChanged =
+checklist[item.id]?.collectedQuantity &&
+checklist[item.id].collectedQuantity !== item.quantity;
+const priceChanged =
+checklist[item.id]?.newPrice &&
+parseFloat(checklist[item.id].newPrice) !== parseFloat(item.price);
+return (
 <Box
 key={item.id}
 sx={{
 display: 'grid',
 gridTemplateColumns: {
 xs: '1fr 1fr',
-sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr'
+sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr',
 },
 alignItems: 'center',
 gap: 1,
 mb: 1,
-width: '100%'
+width: '100%',
+p: 0.5,
 }}
 >
 <Typography>{item.id}</Typography>
 <Typography>{item.name}</Typography>
-{/* Quantity (hidden on xs) */}
 <Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
 {item.quantity}
 </Typography>
-{/* "Coll." checkbox (hidden on xs) */}
 <FormControlLabel
 control={
 <Checkbox
@@ -1146,65 +1166,61 @@ onChange={() => toggleCollected(item.id)}
 />
 }
 label=""
-sx={{
-mr: 0,
-display: { xs: 'none', sm: 'inline-flex' }
-}}
+sx={{ mr: 0, display: { xs: 'none', sm: 'inline-flex' } }}
 />
-{/* Collected input (hidden on xs) */}
 <TextField
 label="Collected"
 type="number"
 size="small"
 value={
-checklist[item.id]?.collectedQuantity !== undefined
+checklist[item.id]?.collectedQuantity !== undefined && checklist[item.id].collectedQuantity !== null
 ? checklist[item.id].collectedQuantity
 : ''
 }
-onChange={(e) => updateChecklistField(item.id, 'collectedQuantity', e.target.value)}
-// For mobile numeric keyboard
+onChange={(e) => {
+const newValue = e.target.value === '' ? null : parseInt(e.target.value, 10);
+updateChecklistField(item.id, 'collectedQuantity', newValue);
+}}
 inputProps={{
 min: 0,
 style: { textAlign: 'right' },
 inputMode: 'numeric',
-pattern: '[0-9]*'
+pattern: '[0-9]*',
 }}
 sx={{
 width: '100%',
 maxWidth: { xs: '90px', sm: '100%' },
-textAlign: 'right',
-display: { xs: 'none', sm: 'inline-flex' }
+bgcolor: quantityChanged ? '#e0f2fe' : 'transparent',
 }}
 />
-{/* New Price input (hidden on xs) */}
 <TextField
 label="New Price"
 type="number"
 size="small"
 value={
-checklist[item.id]?.newPrice !== undefined
+checklist[item.id]?.newPrice !== undefined && checklist[item.id].newPrice !== null
 ? checklist[item.id].newPrice
 : ''
 }
-onChange={(e) => updateChecklistField(item.id, 'newPrice', e.target.value)}
+onChange={(e) => {
+const newValue = e.target.value === '' ? null : parseFloat(e.target.value);
+updateChecklistField(item.id, 'newPrice', newValue);
+}}
 inputProps={{
 min: 0,
 style: { textAlign: 'right' },
 inputMode: 'decimal',
-pattern: '[0-9]*'
+pattern: '[0-9]*',
 }}
 sx={{
 width: '100%',
 maxWidth: { xs: '90px', sm: '100%' },
-textAlign: 'right',
-display: { xs: 'none', sm: 'inline-flex' }
+bgcolor: priceChanged ? '#e0f2fe' : 'transparent',
 }}
 />
-{/* Original Price */}
 <Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
 ${parseFloat(item.price).toFixed(2)}
 </Typography>
-{/* Replace button */}
 <Button
 variant="outlined"
 size="small"
@@ -1214,7 +1230,11 @@ sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
 Replace
 </Button>
 </Box>
-))}
+);
+})}
+<Box sx={{ mt: 2, textAlign: 'right', fontWeight: 'bold' }}>
+Total: ${totalCost.toFixed(2)}
+</Box>
 </Paper>
 );
 })}
@@ -1374,13 +1394,16 @@ return <VirtualizedProductsTable products={products} addToBasket={addToBasket} /
 
 
 # ** File: src/components/DeliveredOrderCard.js **
+// src/components/DeliveredOrderCard.js
 import React, { useState, useEffect } from 'react';
 import { Paper, Typography, Box, Button } from '@mui/material';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-const DeliveredOrderCard = ({ order }) => {
+// <-- NEW: import your local logo
+import logo from '../logo.png';
+export default function DeliveredOrderCard({ order }) {
 // Only fetching company info and address now; email comes from order.email
 const [address, setAddress] = useState(null);
 const [companyName, setCompanyName] = useState('');
@@ -1401,30 +1424,46 @@ console.error('Error fetching address/company info', error);
 };
 fetchPartnerInfo();
 }, [order.email]);
+// 1) Compute total cost
+const totalCost = (order.items || []).reduce(
+(acc, item) => acc + item.price * item.quantity,
+0
+);
 const printBill = () => {
 const doc = new jsPDF();
+// 2) Insert the logo at top-left corner
+//    x=10, y=10, width=30, height auto (approx)
+doc.addImage(logo, 'PNG', 10, 10, 30, 0);
+// Optionally, add a horizontal line across the page, same as aggregator
+doc.setLineWidth(0.5);
+doc.line(10, 25, 200, 25);
+// 3) Add main title or text, after the line
+let startY = 35; // move content down
 doc.setFontSize(16);
-doc.text('Delivery Bill', 14, 20);
+doc.text('Delivery Bill', 14, startY);
+startY += 10;
+// Additional info (order ID, date, etc.)
 doc.setFontSize(12);
-doc.text(`Order ID: ${order.id}`, 14, 30);
-const deliveredOn = order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A';
-doc.text(`Delivered on: ${deliveredOn}`, 14, 40);
-let startY = 50;
-// Company info
+doc.text(`Order ID: ${order.id}`, 14, startY);
+startY += 8;
+const deliveredOn = order.deliveredAt
+? order.deliveredAt.toDate().toLocaleString()
+: 'N/A';
+doc.text(`Delivered on: ${deliveredOn}`, 14, startY);
+startY += 10;
 if (companyName) {
 doc.text(`Company: ${companyName}`, 14, startY);
 startY += 8;
 }
-// Always show email from order.email
 doc.text(`Email: ${order.email}`, 14, startY);
 startY += 8;
 if (address) {
 doc.text(`Address: ${address}`, 14, startY);
 startY += 10;
 }
-// PDF table with four columns: ID, Name, Quantity, and Price.
+// PDF table with four columns: ID, Name, Quantity, and Price
 const tableColumns = ['ID', 'Name', 'Quantity', 'Price'];
-const tableRows = order.items.map(item => [
+const tableRows = (order.items || []).map(item => [
 item.id,
 item.name,
 item.quantity.toString(),
@@ -1441,12 +1480,20 @@ columnStyles: {
 3: { halign: 'right' }
 }
 });
-// Add signature if available.
+// If there's a signature, place it below the table
+let finalY = doc.lastAutoTable.finalY || startY;
 if (order.signature) {
-const finalY = doc.lastAutoTable.finalY || startY;
 doc.text('Signature:', 14, finalY + 15);
 doc.addImage(order.signature, 'PNG', 14, finalY + 20, 60, 30);
+finalY += 45; // enough space for the signature
+} else {
+finalY = finalY + 10; // small gap
 }
+// Optionally, show total cost below the table
+doc.setFontSize(12);
+doc.setFont('', 'bold');
+doc.text(`Total: $${totalCost.toFixed(2)}`, 14, finalY + 10);
+// 4) Save the PDF
 doc.save(`delivery_bill_order_${order.id}.pdf`);
 };
 return (
@@ -1469,10 +1516,11 @@ Address: {address}
 </Typography>
 )}
 <Typography variant="body2">
-Delivered on: {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
+Delivered on:{' '}
+{order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
 </Typography>
 {/* Web Interface: Items in columns */}
-{order.items && order.items.length > 0 && (
+{(order.items && order.items.length > 0) && (
 <Box sx={{ mt: 2 }}>
 {/* Header Row */}
 <Box sx={{ display: 'flex', borderBottom: '1px solid #ccc', pb: 1, mb: 1 }}>
@@ -1494,11 +1542,17 @@ ${parseFloat(item.price).toFixed(2)}
 ))}
 </Box>
 )}
+{/* Show total cost in the UI as well */}
+<Typography
+variant="body2"
+sx={{ textAlign: 'right', mt: 2, fontWeight: 'bold' }}
+>
+Total: ${totalCost.toFixed(2)}
+</Typography>
+{/* If signature, show it in the UI */}
 {order.signature && (
 <Box sx={{ mt: 2 }}>
-<Typography variant="body2">
-<strong>Signature:</strong>
-</Typography>
+<Typography variant="body2"><strong>Signature:</strong></Typography>
 <Box
 component="img"
 src={order.signature}
@@ -1512,8 +1566,7 @@ Print Delivery Bill
 </Button>
 </Paper>
 );
-};
-export default DeliveredOrderCard;
+}
 
 
 
@@ -1692,9 +1745,9 @@ console.error("Erreur lors de la création du document checklist", error);
 // Mettre à jour un champ du checklist (collectedQuantity ou newPrice)
 const updateChecklistField = async (productId, field, value) => {
 const wc = getWeekCode(new Date());
-const numericValue = parseFloat(value) || 0;
+const numericValue = value !== null ? value : null;
 if (checklist[productId]) {
-// Mettre à jour un doc existant
+// Update existing doc
 try {
 await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
 [field]: numericValue,
@@ -1704,15 +1757,15 @@ updatedAt: serverTimestamp()
 console.error("Erreur lors de la mise à jour d'un champ du checklist", error);
 }
 } else {
-// Créer un nouveau doc si inexistant
+// Create new doc if nonexistent
 try {
 const newDocRef = doc(collection(firestore, 'delivery_checklist'));
 await setDoc(newDocRef, {
 weekCode: wc,
 productId,
 collected: false,
-collectedQuantity: field === 'collectedQuantity' ? numericValue : 0,
-newPrice: field === 'newPrice' ? numericValue : 0,
+collectedQuantity: field === 'collectedQuantity' ? numericValue : null,
+newPrice: field === 'newPrice' ? numericValue : null,
 createdAt: serverTimestamp(),
 updatedAt: serverTimestamp()
 });
@@ -2311,6 +2364,11 @@ console.error('Error fetching partner info', error);
 };
 fetchPartnerInfo();
 }, [order.email]);
+// 1) Compute total
+const totalCost = (order.items || []).reduce(
+(acc, item) => acc + item.price * item.quantity,
+0
+);
 return (
 <Paper sx={{ mb: 2, p: 2 }}>
 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
@@ -2333,7 +2391,7 @@ Address: {address}
 Delivery Status: {order.deliveryStatus || 'N/A'}
 </Typography>
 <Box sx={{ mt: 2 }}>
-{order.items?.map((item) => (
+{(order.items || []).map((item) => (
 <Box key={item.id} sx={{ mb: 1 }}>
 <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
 {/* Item name */}
@@ -2353,15 +2411,14 @@ size="small"
 value={item.quantity}
 onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
 sx={{
-// A bit narrower on small screens:
 width: { xs: '50px', sm: '60px' },
-textAlign: 'right'
+textAlign: 'right',
 }}
 inputProps={{
 style: { textAlign: 'right' },
 min: 0,
-inputMode: 'numeric',    // helps mobile show numeric keyboard
-pattern: '[0-9]*'       // restricts to digits
+inputMode: 'numeric',
+pattern: '[0-9]*'
 }}
 />
 </Box>
@@ -2374,6 +2431,13 @@ Comment: {item.comment}
 </Box>
 ))}
 </Box>
+{/* 2) Show total cost at bottom */}
+<Typography
+variant="body2"
+sx={{ textAlign: 'right', mt: 2, fontWeight: 'bold' }}
+>
+Total: ${totalCost.toFixed(2)}
+</Typography>
 <Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
 <Button
 variant="contained"

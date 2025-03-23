@@ -38,49 +38,48 @@ export default function OrderCard({
     fetchPartnerInfo();
   }, [order.email]);
 
+  // 1) Compute total
+  const totalCost = (order.items || []).reduce(
+    (acc, item) => acc + item.price * item.quantity,
+    0
+  );
+
   return (
     <Paper sx={{ mb: 2, p: 2 }}>
       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
         Order ID: {order.id}
       </Typography>
-
       {companyName && (
         <Typography variant="body2" sx={{ mb: 1 }}>
           Company: {companyName}
         </Typography>
       )}
-
       <Typography variant="body2" sx={{ mb: 1 }}>
         Email: {order.email}
       </Typography>
-
       {address && (
         <Typography variant="body2" sx={{ mb: 1 }}>
           Address: {address}
         </Typography>
       )}
-
       <Typography variant="body2">
         Delivery Status: {order.deliveryStatus || 'N/A'}
       </Typography>
 
       <Box sx={{ mt: 2 }}>
-        {order.items?.map((item) => (
+        {(order.items || []).map((item) => (
           <Box key={item.id} sx={{ mb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
               {/* Item name */}
               <Typography sx={{ flex: 1 }}>{item.name}</Typography>
-
               {/* Supplier */}
               <Typography sx={{ flex: 1 }}>
                 {item.supplier || 'N/A'}
               </Typography>
-
               {/* Price (not editable, just displayed) */}
               <Typography sx={{ width: '80px', textAlign: 'right' }}>
                 ${parseFloat(item.price).toFixed(2)}
               </Typography>
-
               {/* Quantity field: numeric-friendly for mobile */}
               <TextField
                 type="number"
@@ -88,19 +87,17 @@ export default function OrderCard({
                 value={item.quantity}
                 onChange={(e) => onQuantityChange(order.id, item.id, e.target.value)}
                 sx={{
-                  // A bit narrower on small screens:
                   width: { xs: '50px', sm: '60px' },
-                  textAlign: 'right'
+                  textAlign: 'right',
                 }}
                 inputProps={{
                   style: { textAlign: 'right' },
                   min: 0,
-                  inputMode: 'numeric',    // helps mobile show numeric keyboard
-                  pattern: '[0-9]*'       // restricts to digits
+                  inputMode: 'numeric',
+                  pattern: '[0-9]*'
                 }}
               />
             </Box>
-
             {/* Optional comment */}
             {item.comment && (
               <Typography variant="body2" sx={{ ml: 2, color: 'grey.600' }}>
@@ -111,6 +108,14 @@ export default function OrderCard({
         ))}
       </Box>
 
+      {/* 2) Show total cost at bottom */}
+      <Typography
+        variant="body2"
+        sx={{ textAlign: 'right', mt: 2, fontWeight: 'bold' }}
+      >
+        Total: ${totalCost.toFixed(2)}
+      </Typography>
+
       <Box sx={{ mt: 2, display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
         <Button
           variant="contained"
@@ -119,7 +124,6 @@ export default function OrderCard({
         >
           Mark Delivered
         </Button>
-
         <Button variant="contained" onClick={() => onAddProduct(order.id)}>
           Ajouter un produit
         </Button>

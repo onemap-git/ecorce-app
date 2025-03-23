@@ -183,9 +183,10 @@ export default function DeliveryDashboard({ user }) {
   // Mettre à jour un champ du checklist (collectedQuantity ou newPrice)
   const updateChecklistField = async (productId, field, value) => {
     const wc = getWeekCode(new Date());
-    const numericValue = parseFloat(value) || 0;
+    const numericValue = value !== null ? value : null;
+  
     if (checklist[productId]) {
-      // Mettre à jour un doc existant
+      // Update existing doc
       try {
         await updateDoc(doc(firestore, 'delivery_checklist', checklist[productId].id), {
           [field]: numericValue,
@@ -195,15 +196,15 @@ export default function DeliveryDashboard({ user }) {
         console.error("Erreur lors de la mise à jour d'un champ du checklist", error);
       }
     } else {
-      // Créer un nouveau doc si inexistant
+      // Create new doc if nonexistent
       try {
         const newDocRef = doc(collection(firestore, 'delivery_checklist'));
         await setDoc(newDocRef, {
           weekCode: wc,
           productId,
           collected: false,
-          collectedQuantity: field === 'collectedQuantity' ? numericValue : 0,
-          newPrice: field === 'newPrice' ? numericValue : 0,
+          collectedQuantity: field === 'collectedQuantity' ? numericValue : null,
+          newPrice: field === 'newPrice' ? numericValue : null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -211,7 +212,7 @@ export default function DeliveryDashboard({ user }) {
         console.error("Erreur lors de la création du document checklist", error);
       }
     }
-  };
+  };  
 
   // --------------------------------------------------
   //  "Add Product" dialog
