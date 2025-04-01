@@ -1,3 +1,4 @@
+// src/components/Basket.js
 import React, { useState, useEffect } from 'react';
 import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/material';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
@@ -6,10 +7,10 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBasketItem, saveOrder, isOrderAllowed }) {
   const [expanded, setExpanded] = useState(false);
-  // État local pour suivre l'affichage du champ de commentaire pour chaque article.
+  // Local state to track which item comments are open
   const [commentOpen, setCommentOpen] = useState({});
 
-  // Lorsque le panier change, s'assurer que les articles avec un commentaire existant soient ouverts par défaut.
+  // When the basket changes, ensure that items with an existing comment have their comment field open
   useEffect(() => {
     setCommentOpen(prev => {
       const newState = { ...prev };
@@ -27,9 +28,9 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
     setCommentOpen(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const totalCost = basket
-    .reduce((acc, item) => acc + item.price * item.quantity, 0)
-    .toFixed(2);
+  // Calculate the total as a number and also as a formatted string
+  const totalCostValue = basket.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const totalCost = totalCostValue.toFixed(2);
 
   return (
     <Box
@@ -109,6 +110,16 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
             </>
           )}
         </Box>
+        {/* New message if total cost is under $400 */}
+        {basket.length > 0 && totalCostValue < 400 && (
+          <Typography
+            variant="caption"
+            color="error"
+            sx={{ mt: 1, display: 'block', fontSize: '1rem' }}
+          >
+            On n’est pas encore à 400$, c'est le minimum pour la livraison.
+          </Typography>
+        )}
         {basket.length > 0 && (
           <>
             {!isOrderAllowed && (

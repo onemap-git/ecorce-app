@@ -32,21 +32,21 @@ export function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierL
   //    Move startY further down if needed
   let startY = 35; // move content down so it doesn't overlap
   doc.setFontSize(16);
-  doc.text(`Aggregated Products - Week ${currentWeek}`, 14, startY);
+  doc.text(`Produits agrégés – Semaine ${currentWeek}`, 14, startY);
   startY += 10;
 
   doc.setFontSize(12);
   if (supplierLabel) {
-    doc.text(`Supplier: ${supplierLabel}`, 14, startY);
+    doc.text(`Fournisseur: ${supplierLabel}`, 14, startY);
     startY += 10;
   }
 
   // 4) Prepare columns
   const columns = [
-    { header: 'ID - Name', dataKey: 'name' },
-    { header: 'Qty', dataKey: 'quantity' },
-    { header: 'Price', dataKey: 'price' },
-    { header: 'Line Total', dataKey: 'total' },
+    { header: 'ID - Nom', dataKey: 'name' },
+    { header: 'Qtée', dataKey: 'quantity' },
+    { header: 'Prix', dataKey: 'price' },
+    { header: 'Total', dataKey: 'total' },
   ];
 
   // 5) Prepare row data for autoTable

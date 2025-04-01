@@ -122,24 +122,24 @@ export default function DeliveredOrderCard({ order }) {
   return (
     <Paper sx={{ mb: 2, p: 2, backgroundColor: '#f7f7f7' }}>
       <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-        Order ID: {order.id}
+        ID de commande: {order.id}
       </Typography>
       {/* Display company info */}
       {companyName && (
         <Typography variant="body2" sx={{ mb: 1 }}>
-          Company: {companyName}
+          Compagnie: {companyName}
         </Typography>
       )}
       <Typography variant="body2" sx={{ mb: 1 }}>
-        Email: {order.email}
+        Courriel: {order.email}
       </Typography>
       {address && (
         <Typography variant="body2" sx={{ mb: 1 }}>
-          Address: {address}
+          Adresse: {address}
         </Typography>
       )}
       <Typography variant="body2">
-        Delivered on:{' '}
+        Livré le:{' '}
         {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
       </Typography>
 
@@ -149,9 +149,9 @@ export default function DeliveredOrderCard({ order }) {
           {/* Header Row */}
           <Box sx={{ display: 'flex', borderBottom: '1px solid #ccc', pb: 1, mb: 1 }}>
             <Box sx={{ flex: 1, fontWeight: 'bold' }}>ID</Box>
-            <Box sx={{ flex: 3, fontWeight: 'bold' }}>Name</Box>
-            <Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Quantity</Box>
-            <Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Price</Box>
+            <Box sx={{ flex: 3, fontWeight: 'bold' }}>Nom</Box>
+            <Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Quantitée</Box>
+            <Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Prix</Box>
           </Box>
           {/* Data Rows */}
           {order.items.map(item => (
@@ -189,7 +189,7 @@ export default function DeliveredOrderCard({ order }) {
       )}
 
       <Button variant="contained" onClick={printBill} sx={{ mt: 2 }}>
-        Print Delivery Bill
+        Imprimer le bon de livraison
       </Button>
     </Paper>
   );

@@ -19,29 +19,32 @@ import {
   MenuItem
 } from '@mui/material';
 
-export default function AddProductDialog({ open, onClose, onProductSelect }) {
-  // mode can be "select" (choose an existing product) or "manual" (add new)
-  const [mode, setMode] = useState('select');
+export default function AddProductDialog({ open, onClose, onProductSelect, defaultMode }) {
+  // Use defaultMode prop (if provided) or default to "select"
+  const [mode, setMode] = useState(defaultMode || 'select');
   const [searchTerm, setSearchTerm] = useState('');
   const [products, setProducts] = useState([]);
-
   // State for manual product form
   const [newProduct, setNewProduct] = useState({
     name: '',
     code: '',
     price: '',
-    supplier: '' // <--- New field for supplier
+    supplier: ''
   });
   const [loading, setLoading] = useState(false);
 
-  // Fetch available products
+  useEffect(() => {
+    setMode(defaultMode || 'select');
+    setSearchTerm('');
+    setNewProduct({ name: '', code: '', price: '', supplier: '' });
+  }, [open, defaultMode]);
+
+  // Fetch available products (for select mode)
   useEffect(() => {
     const productsRef = collection(firestore, 'products');
-    // Assuming manually added products are also available
     const q = query(productsRef, where('available', '==', true));
     const unsubscribe = onSnapshot(q, snapshot => {
       const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      // Sort so that manually added ones appear first
       prods.sort((a, b) => {
         if (a.manuallyAdded && !b.manuallyAdded) return -1;
         if (!a.manuallyAdded && b.manuallyAdded) return 1;
@@ -52,32 +55,25 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
     return () => unsubscribe();
   }, []);
 
-  // Filter products based on search term (only used in select mode)
+  // Filter products based on search term (only in select mode)
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Handler for manual product submission
+  // Handler for manual product submission (creation)
   const handleManualSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Prepare new product data; tag it as manually added
       const newProdData = {
         ...newProduct,
-        price: parseFloat(newProduct.price) || 0,  // fallback to 0 if empty
+        price: parseFloat(newProduct.price) || 0,
         available: true,
         manuallyAdded: true
       };
-
-      // Add the product to Firestore
       const docRef = await addDoc(collection(firestore, 'products'), newProdData);
       const createdProduct = { id: docRef.id, ...newProdData };
-
-      // Pass the new product to the parent so it can be added to the order
       onProductSelect(createdProduct);
-
-      // Reset the manual form and mode
       setNewProduct({ name: '', code: '', price: '', supplier: '' });
       setMode('select');
     } catch (error) {
@@ -92,7 +88,6 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
       <DialogTitle>
         {mode === 'select' ? 'Ajouter un produit' : 'Ajouter un produit manuellement'}
       </DialogTitle>
-
       <DialogContent>
         {mode === 'select' ? (
           <>
@@ -120,7 +115,6 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
             </List>
           </>
         ) : (
-          // Manual entry form
           <form onSubmit={handleManualSubmit}>
             <TextField
               label="Nom du produit"
@@ -131,8 +125,6 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
               onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
               required
             />
-
-            {/* Code is now NOT mandatory, so removed 'required' */}
             <TextField
               label="Code du produit"
               variant="outlined"
@@ -141,7 +133,6 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
               value={newProduct.code}
               onChange={(e) => setNewProduct({ ...newProduct, code: e.target.value })}
             />
-
             <TextField
               label="Prix"
               variant="outlined"
@@ -152,8 +143,6 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
               onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
               required
             />
-
-            {/* New dropdown for selecting a supplier */}
             <FormControl fullWidth margin="normal">
               <InputLabel>Fournisseur</InputLabel>
               <Select
@@ -162,12 +151,10 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
                 onChange={(e) => setNewProduct({ ...newProduct, supplier: e.target.value })}
                 required
               >
-                {/* Example static items; replace with dynamic data if needed */}
                 <MenuItem value="Big Block">Big Block</MenuItem>
                 <MenuItem value="canadawide">canadawide</MenuItem>
               </Select>
             </FormControl>
-
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
               <Button onClick={() => setMode('select')} color="primary">
                 Retour
@@ -179,8 +166,6 @@ export default function AddProductDialog({ open, onClose, onProductSelect }) {
           </form>
         )}
       </DialogContent>
-
-      {/* Only show these DialogActions in 'select' mode */}
       {mode === 'select' && (
         <DialogActions>
           <Button onClick={() => setMode('manual')} variant="contained" color="primary">

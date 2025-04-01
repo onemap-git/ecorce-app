@@ -40,13 +40,13 @@ export default function SignatureOverlay({
 
         <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
           <Button variant="outlined" onClick={onClear}>
-            Clear
+            Effacer
           </Button>
           <Button variant="contained" onClick={onSave}>
-            Save Signature
+            Enregistrer la signature
           </Button>
           <Button variant="text" onClick={onCancel}>
-            Cancel
+            Annuler
           </Button>
         </Box>
       </Box>

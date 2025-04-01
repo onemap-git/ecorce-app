@@ -30,6 +30,7 @@ import {
   Checkbox,
   FormControlLabel
 } from '@mui/material';
+import { Link } from 'react-router-dom'; // Import Link for navigation
 import { useDeliveryAggregation } from '../hooks/useDeliveryAggregation';
 import AggregatedTable from './AggregatedTable';
 import SignatureOverlay from './SignatureOverlay';
@@ -111,7 +112,7 @@ function ReplaceOrdersSelectionDialog({
   );
 }
 
-export default function DeliveryDashboard({ user }) {
+export default function DeliveryDashboard({ user, isAdmin }) {
   // Récupération via le hook d’agrégation
   const { orders, aggregatedBySupplier, supplierInvoiceUrl, currentWeek } = useDeliveryAggregation();
 
@@ -169,8 +170,8 @@ export default function DeliveryDashboard({ user }) {
           weekCode: wc,
           productId,
           collected: true,
-          collectedQuantity: 0,
-          newPrice: 0,
+          collectedQuantity: null,
+          newPrice: null,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
@@ -212,7 +213,7 @@ export default function DeliveryDashboard({ user }) {
         console.error("Erreur lors de la création du document checklist", error);
       }
     }
-  };  
+  };
 
   // --------------------------------------------------
   //  "Add Product" dialog
@@ -504,6 +505,14 @@ export default function DeliveryDashboard({ user }) {
       <Typography variant="h4" gutterBottom>
         Tableau de bord des livraisons
       </Typography>
+
+      {/* Admin-only button: visible only if isAdmin prop is true */}
+      {isAdmin && (
+        <Button variant="outlined" component={Link} to="/admin/products" sx={{ mb: 2 }}>
+          Products Manager
+        </Button>
+      )}
+
       <Typography variant="body1" gutterBottom>
         Commandes pour la semaine : {currentWeek}
       </Typography>

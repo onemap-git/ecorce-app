@@ -30,11 +30,11 @@ function MobileProductsList({ products, addToBasket }) {
           
           {/* Example: Show Price and maybe Category */}
           <Typography variant="body2" sx={{ mt: 0.5 }}>
-            Price: ${product.price?.toFixed(2)}
+            Prix: ${product.price?.toFixed(2)}
           </Typography>
           {product.category && (
             <Typography variant="body2" sx={{ color: 'grey.600' }}>
-              Category: {product.category}
+              Catégorie: {product.category}
             </Typography>
           )}
           

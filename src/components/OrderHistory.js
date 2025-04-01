@@ -39,14 +39,14 @@ function OrderHistory({ user }) {
   return (
     <Container sx={{ py: 4 }}>
       <Typography variant="h4" gutterBottom>
-        Order History
+        Historique des commandes
       </Typography>
       <Link component={RouterLink} to="/">
-        Back to Products
+        Retour aux produits
       </Link>
 
       {orders.length === 0 ? (
-        <Typography sx={{ mt: 2 }}>No orders found.</Typography>
+        <Typography sx={{ mt: 2 }}>Aucune commande trouvée.</Typography>
       ) : (
         orders.map(order => {
           // 1) Calculate total cost for each order
@@ -58,7 +58,7 @@ function OrderHistory({ user }) {
           return (
             <Paper key={order.id} sx={{ mb: 2, p: 2 }}>
               <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-                Order ID: {order.id}
+                ID de commande: {order.id}
               </Typography>
               <Typography variant="body2">
                 <strong>Date:</strong>{' '}
@@ -78,7 +78,7 @@ function OrderHistory({ user }) {
               {/* If delivered, show delivery date */}
               {order.deliveryStatus === 'delivered' && (
                 <Typography variant="body2">
-                  <strong>Delivery Date:</strong>{' '}
+                  <strong>Date de livraison:</strong>{' '}
                   {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
                 </Typography>
               )}
@@ -86,7 +86,7 @@ function OrderHistory({ user }) {
               {/* Items table */}
               <Box sx={{ mt: 1 }}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                  Items:
+                  Articles:
                 </Typography>
 
                 {/* Table header */}
@@ -131,7 +131,7 @@ function OrderHistory({ user }) {
                           variant="body2"
                           sx={{ ml: 2, color: 'grey.600', pt: 0.5 }}
                         >
-                          Comment: {item.comment}
+                          Commentaire: {item.comment}
                         </Typography>
                       )}
                     </Box>

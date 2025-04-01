@@ -327,11 +327,11 @@ function ProductsPage({ user, isDelivery }) {
                 onClick={handleLogout}
                 sx={{ mt: 1 }}
               >
-                Log Out
+                Déconnexion
               </Button>
               {isDelivery && (
                 <Button variant="outlined" component={Link} to="/delivery" sx={{ mt: 1, ml: 1 }}>
-                  Delivery Dashboard
+                  Tableau de bord des livraisons
                 </Button>
               )}
               {userAddress && (

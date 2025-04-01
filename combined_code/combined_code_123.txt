@@ -1,12 +1,12 @@
 # Combined source code for commit: 123
-# Generated on: 2025-03-23 17:34:22
+# Generated on: 2025-04-01 08:05:45
 
 
 
 # ** File: functions/index.js **
 // 1) Import Functions + Admin SDK
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
-const { logger } = require('firebase-functions'); // optional for logs
+const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
 // 2) Initialize Admin if not already
 admin.initializeApp();
@@ -14,46 +14,63 @@ admin.initializeApp();
 const db = admin.firestore();
 /**
 * Triggers whenever a `delivery_checklist/{docId}` doc is created/updated/deleted.
-* We specifically look for changes in the `newPrice` field, and apply them
-* to non-delivered orders containing that product (same weekCode).
+* If a new numeric value is set in the `newPrice` field, it updates all non-delivered orders.
+* If `newPrice` is cleared (non-numeric) after having been set, it reverts to the product's default price.
 */
 exports.applyPriceChangeToAllOrders = onDocumentWritten(
 {
 document: 'delivery_checklist/{docId}',
-// optionally you can set `region` / `timeoutSeconds` / `memory`
 },
 async (event) => {
-// If the document was deleted, exit
+// If the document was deleted, exit.
 if (!event.data.after) {
 return null;
 }
-// old data vs. new data
+// Get old and new data.
 const oldData = event.data.before?.data() || {};
 const newData = event.data.after.data() || {};
-// Make sure `productId` and `newPrice` exist
+// Must have a productId.
 if (!newData.productId) {
 logger.info('No productId in new data, skipping...');
 return null;
 }
-if (typeof newData.newPrice !== 'number') {
-logger.info('No numeric newPrice in new data, skipping...');
-return null;
-}
-// If `newPrice` hasn't changed, do nothing
-if (newData.newPrice === oldData.newPrice) {
-logger.info('newPrice did not change, skipping...');
-return null;
-}
-// Require a weekCode (so we only update the current week's orders).
+// Must have a weekCode.
 const weekCode = newData.weekCode;
 if (!weekCode) {
 logger.info('No weekCode in new data, skipping...');
 return null;
 }
 const productId = newData.productId;
-const newPrice = newData.newPrice;
-// 4) Query the "orders" collection for the matching weekCode.
-// We'll filter out delivered status in code below.
+// Determine whether newPrice is numeric.
+const newPriceIsNumeric = typeof newData.newPrice === 'number';
+const oldPriceIsNumeric = typeof oldData.newPrice === 'number';
+// If newPrice hasn't changed, do nothing.
+if (newData.newPrice === oldData.newPrice) {
+logger.info('newPrice did not change, skipping...');
+return null;
+}
+// Decide which price to apply.
+let priceToApply;
+if (newPriceIsNumeric) {
+// When a new numeric price is provided, use it.
+priceToApply = newData.newPrice;
+logger.info(`Applying new price ${priceToApply} for product ${productId}`);
+} else {
+// When newPrice is cleared, revert only if there was a prior override.
+if (!oldPriceIsNumeric) {
+logger.info('newPrice is not numeric and no prior override, skipping revert.');
+return null;
+}
+// Fetch the product's default price from Firestore.
+const productSnap = await db.collection('products').doc(productId).get();
+if (!productSnap.exists) {
+logger.info(`Product ${productId} not found; cannot revert price.`);
+return null;
+}
+priceToApply = productSnap.data().price;
+logger.info(`Reverting price for product ${productId} to default ${priceToApply}`);
+}
+// 4) Query the "orders" collection for orders matching the weekCode.
 const ordersSnap = await db
 .collection('orders')
 .where('weekCode', '==', weekCode)
@@ -62,28 +79,27 @@ if (ordersSnap.empty) {
 logger.info(`No orders found for weekCode=${weekCode} to update.`);
 return null;
 }
-// 5) Filter out orders that are explicitly "delivered".
-//    If deliveryStatus is missing or anything else, we apply the new price.
+// 5) Filter out orders that are already delivered.
 const relevantDocs = ordersSnap.docs.filter((docSnap) => {
 const data = docSnap.data();
-return data.deliveryStatus !== 'delivered'; // keep only non-delivered
+return data.deliveryStatus !== 'delivered';
 });
 if (relevantDocs.length === 0) {
 logger.info('All orders are delivered or none matching. Nothing to update.');
 return null;
 }
-// 6) Batch-update all relevant (non-delivered) orders
+// 6) Batch-update all relevant (non-delivered) orders.
 const batch = db.batch();
 relevantDocs.forEach((orderDoc) => {
 const orderData = orderDoc.data();
 if (!Array.isArray(orderData.items) || orderData.items.length === 0) {
-return; // no items to update
+return; // No items to update.
 }
 let changed = false;
 const updatedItems = orderData.items.map((item) => {
 if (item.id === productId) {
 changed = true;
-return { ...item, price: newPrice };
+return { ...item, price: priceToApply };
 }
 return item;
 });
@@ -94,15 +110,15 @@ updatedAt: admin.firestore.FieldValue.serverTimestamp(),
 });
 }
 });
-// If no docs got changed at all, skip
+// If no documents were updated, exit.
 if (batch._ops.length === 0) {
 logger.info('No items needed updating in non-delivered orders.');
 return null;
 }
-// 7) Commit the batch
+// 7) Commit the batch update.
 await batch.commit();
 logger.info(
-`Successfully updated non-delivered orders with new price ${newPrice} for productId ${productId}.`
+`Successfully updated non-delivered orders for product ${productId} with price ${priceToApply}.`
 );
 return null;
 }
@@ -265,66 +281,61 @@ import Login from './components/Login';
 import ProductsPage from './components/ProductsPage';
 import OrderHistory from './components/OrderHistory';
 import DeliveryDashboard from './components/DeliveryDashboard';
+import ProductsManager from './components/ProductsManager'; // NEW: Products Manager for admins
 function App() {
 const [user, setUser] = useState(null);
 const [isDelivery, setIsDelivery] = useState(false);
-const [loading, setLoading] = useState(true); // New loading state
+const [isAdmin, setIsAdmin] = useState(false); // admin flag
+const [loading, setLoading] = useState(true); // loading state
 useEffect(() => {
 const unsub = auth.onAuthStateChanged(async (u) => {
 setUser(u);
 if (u) {
-// Check if user is a delivery person
+// Fetch the user document from Firestore
 const userDocRef = doc(firestore, 'users', u.uid);
 const snap = await getDoc(userDocRef);
 if (snap.exists()) {
 const data = snap.data();
-if (data.delivery === true) {
-console.log('Is delivery');
-setIsDelivery(true);
+setIsDelivery(data.delivery === true);
+setIsAdmin(data.admin === true); // set admin flag based on user doc
 } else {
 setIsDelivery(false);
+setIsAdmin(false);
 }
 } else {
 setIsDelivery(false);
+setIsAdmin(false);
 }
-} else {
-setIsDelivery(false);
-}
-setLoading(false); // Loading complete after auth & fetch check
+setLoading(false);
 });
 return () => unsub();
 }, []);
 if (loading) {
-// Render a loading indicator or nothing until the state is determined
+// Render a loading indicator until auth and user data are loaded
 return <div>Loading...</div>;
 }
 return (
 <Router>
 <Routes>
-{/* Public or login */}
-<Route
-path="/login"
-element={user ? <Navigate to="/" /> : <Login />}
-/>
-{/* Normal user path */}
+{/* Public route for login */}
+<Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+{/* Normal user route */}
 <Route
 path="/"
 element={user ? <ProductsPage user={user} isDelivery={isDelivery} /> : <Navigate to="/login" />}
 />
-<Route
-path="/orders"
-element={user ? <OrderHistory user={user} /> : <Navigate to="/login" />}
-/>
-{/* Delivery path (only accessible if user isDelivery) */}
+<Route path="/orders" element={user ? <OrderHistory user={user} /> : <Navigate to="/login" />} />
+{/* Delivery route */}
 <Route
 path="/delivery"
-element={
-user && isDelivery
-? <DeliveryDashboard user={user} />
-: <Navigate to="/" />
-}
+element={user && isDelivery ? <DeliveryDashboard user={user} isAdmin={isAdmin} /> : <Navigate to="/" />}
 />
-{/* Fallback */}
+{/* Admin Products Manager route */}
+<Route
+path="/admin/products"
+element={user && isAdmin ? <ProductsManager user={user} /> : <Navigate to="/" />}
+/>
+{/* Fallback route */}
 <Route path="*" element={<Navigate to="/" />} />
 </Routes>
 </Router>
@@ -441,9 +452,9 @@ InputLabel,
 Select,
 MenuItem
 } from '@mui/material';
-export default function AddProductDialog({ open, onClose, onProductSelect }) {
-// mode can be "select" (choose an existing product) or "manual" (add new)
-const [mode, setMode] = useState('select');
+export default function AddProductDialog({ open, onClose, onProductSelect, defaultMode }) {
+// Use defaultMode prop (if provided) or default to "select"
+const [mode, setMode] = useState(defaultMode || 'select');
 const [searchTerm, setSearchTerm] = useState('');
 const [products, setProducts] = useState([]);
 // State for manual product form
@@ -451,17 +462,20 @@ const [newProduct, setNewProduct] = useState({
 name: '',
 code: '',
 price: '',
-supplier: '' // <--- New field for supplier
+supplier: ''
 });
 const [loading, setLoading] = useState(false);
-// Fetch available products
+useEffect(() => {
+setMode(defaultMode || 'select');
+setSearchTerm('');
+setNewProduct({ name: '', code: '', price: '', supplier: '' });
+}, [open, defaultMode]);
+// Fetch available products (for select mode)
 useEffect(() => {
 const productsRef = collection(firestore, 'products');
-// Assuming manually added products are also available
 const q = query(productsRef, where('available', '==', true));
 const unsubscribe = onSnapshot(q, snapshot => {
 const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-// Sort so that manually added ones appear first
 prods.sort((a, b) => {
 if (a.manuallyAdded && !b.manuallyAdded) return -1;
 if (!a.manuallyAdded && b.manuallyAdded) return 1;
@@ -471,28 +485,24 @@ setProducts(prods);
 });
 return () => unsubscribe();
 }, []);
-// Filter products based on search term (only used in select mode)
+// Filter products based on search term (only in select mode)
 const filteredProducts = products.filter(product =>
 product.name.toLowerCase().includes(searchTerm.toLowerCase())
 );
-// Handler for manual product submission
+// Handler for manual product submission (creation)
 const handleManualSubmit = async (e) => {
 e.preventDefault();
 setLoading(true);
 try {
-// Prepare new product data; tag it as manually added
 const newProdData = {
 ...newProduct,
-price: parseFloat(newProduct.price) || 0,  // fallback to 0 if empty
+price: parseFloat(newProduct.price) || 0,
 available: true,
 manuallyAdded: true
 };
-// Add the product to Firestore
 const docRef = await addDoc(collection(firestore, 'products'), newProdData);
 const createdProduct = { id: docRef.id, ...newProdData };
-// Pass the new product to the parent so it can be added to the order
 onProductSelect(createdProduct);
-// Reset the manual form and mode
 setNewProduct({ name: '', code: '', price: '', supplier: '' });
 setMode('select');
 } catch (error) {
@@ -533,7 +543,6 @@ secondary={`Prix: $${parseFloat(product.price).toFixed(2)}`}
 </List>
 </>
 ) : (
-// Manual entry form
 <form onSubmit={handleManualSubmit}>
 <TextField
 label="Nom du produit"
@@ -544,7 +553,6 @@ value={newProduct.name}
 onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
 required
 />
-{/* Code is now NOT mandatory, so removed 'required' */}
 <TextField
 label="Code du produit"
 variant="outlined"
@@ -563,7 +571,6 @@ value={newProduct.price}
 onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
 required
 />
-{/* New dropdown for selecting a supplier */}
 <FormControl fullWidth margin="normal">
 <InputLabel>Fournisseur</InputLabel>
 <Select
@@ -572,7 +579,6 @@ value={newProduct.supplier}
 onChange={(e) => setNewProduct({ ...newProduct, supplier: e.target.value })}
 required
 >
-{/* Example static items; replace with dynamic data if needed */}
 <MenuItem value="Big Block">Big Block</MenuItem>
 <MenuItem value="canadawide">canadawide</MenuItem>
 </Select>
@@ -588,7 +594,6 @@ Retour
 </form>
 )}
 </DialogContent>
-{/* Only show these DialogActions in 'select' mode */}
 {mode === 'select' && (
 <DialogActions>
 <Button onClick={() => setMode('manual')} variant="contained" color="primary">
@@ -1063,9 +1068,52 @@ export default ProductRow;
 
 # ** File: src/components/AggregatedTable.js **
 // src/components/AggregatedTable.js
-import React from 'react';
-import { Box, Paper, Typography, Button, FormControlLabel, Checkbox, TextField } from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import {
+Box,
+Paper,
+Typography,
+Button,
+FormControlLabel,
+Checkbox,
+TextField
+} from '@mui/material';
 import { exportAggregatedPDF } from '../utils/pdfUtils';
+import { firestore } from '../firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+// Custom hook: Batch-fetch original prices from products by IDs.
+function useOriginalPrices(productIds) {
+const [pricesMap, setPricesMap] = useState({});
+useEffect(() => {
+async function fetchPrices() {
+const newMap = {};
+if (!productIds || productIds.length === 0) {
+setPricesMap(newMap);
+return;
+}
+// Firestore 'in' queries allow a maximum of 10 values.
+const chunkSize = 10;
+const chunks = [];
+for (let i = 0; i < productIds.length; i += chunkSize) {
+chunks.push(productIds.slice(i, i + chunkSize));
+}
+for (const chunk of chunks) {
+const q = query(
+collection(firestore, 'products'),
+where('__name__', 'in', chunk)
+);
+const snapshot = await getDocs(q);
+snapshot.forEach(doc => {
+const data = doc.data();
+newMap[doc.id] = data.price;
+});
+}
+setPricesMap(newMap);
+}
+fetchPrices();
+}, [productIds]);
+return pricesMap;
+}
 export default function AggregatedTable({
 aggregatedBySupplier,
 supplierInvoiceUrl,
@@ -1076,6 +1124,16 @@ checklist,
 handleOpenReplaceDialog,
 currentWeek,
 }) {
+// Extract unique product IDs from the aggregated orders.
+const productIdsSet = new Set();
+Object.keys(aggregatedBySupplier).forEach(supplier => {
+const itemsObj = aggregatedBySupplier[supplier];
+Object.values(itemsObj).forEach(item => {
+productIdsSet.add(item.id);
+});
+});
+const productIds = Array.from(productIdsSet);
+const originalPrices = useOriginalPrices(productIds);
 if (Object.keys(aggregatedBySupplier).length === 0) {
 return <Typography>No aggregated products.</Typography>;
 }
@@ -1085,8 +1143,14 @@ return (
 .sort()
 .map((supplier) => {
 const itemsObj = aggregatedBySupplier[supplier];
-const itemsArray = Object.values(itemsObj).sort((a, b) => a.name.localeCompare(b.name));
-const totalCost = itemsArray.reduce((acc, item) => acc + item.quantity * item.price, 0);
+// Each aggregated item is assumed to have an optional "comments" array.
+const itemsArray = Object.values(itemsObj).sort((a, b) =>
+a.name.localeCompare(b.name)
+);
+const totalCost = itemsArray.reduce(
+(acc, item) => acc + item.quantity * item.price,
+0
+);
 const handleExportPDF = () => {
 exportAggregatedPDF(itemsArray, currentWeek, supplier);
 };
@@ -1115,31 +1179,48 @@ width: '100%',
 >
 <Typography>ID</Typography>
 <Typography>Name</Typography>
-<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>Qty</Typography>
-<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>Coll.</Typography>
-<Typography sx={{ textAlign: 'center', display: { xs: 'none', sm: 'block' } }}>
+<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>
+Qty
+</Typography>
+<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>
+Coll.
+</Typography>
+<Typography
+sx={{
+textAlign: 'center',
+display: { xs: 'none', sm: 'block' },
+}}
+>
 Collected
 </Typography>
-<Typography sx={{ textAlign: 'center', display: { xs: 'none', sm: 'block' } }}>
+<Typography
+sx={{
+textAlign: 'center',
+display: { xs: 'none', sm: 'block' },
+}}
+>
 New Price
 </Typography>
-<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+<Typography
+sx={{
+textAlign: 'right',
+display: { xs: 'none', sm: 'block' },
+}}
+>
 Orig
 </Typography>
-<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+<Typography
+sx={{
+textAlign: 'right',
+display: { xs: 'none', sm: 'block' },
+}}
+>
 Action
 </Typography>
 </Box>
-{itemsArray.map((item) => {
-const quantityChanged =
-checklist[item.id]?.collectedQuantity &&
-checklist[item.id].collectedQuantity !== item.quantity;
-const priceChanged =
-checklist[item.id]?.newPrice &&
-parseFloat(checklist[item.id].newPrice) !== parseFloat(item.price);
-return (
+{itemsArray.map((item) => (
+<React.Fragment key={item.id}>
 <Box
-key={item.id}
 sx={{
 display: 'grid',
 gridTemplateColumns: {
@@ -1173,7 +1254,8 @@ label="Collected"
 type="number"
 size="small"
 value={
-checklist[item.id]?.collectedQuantity !== undefined && checklist[item.id].collectedQuantity !== null
+checklist[item.id]?.collectedQuantity !== undefined &&
+checklist[item.id].collectedQuantity !== null
 ? checklist[item.id].collectedQuantity
 : ''
 }
@@ -1190,7 +1272,8 @@ pattern: '[0-9]*',
 sx={{
 width: '100%',
 maxWidth: { xs: '90px', sm: '100%' },
-bgcolor: quantityChanged ? '#e0f2fe' : 'transparent',
+bgcolor:
+checklist[item.id]?.collectedQuantity !== item.quantity ? '#e0f2fe' : 'transparent',
 }}
 />
 <TextField
@@ -1198,7 +1281,8 @@ label="New Price"
 type="number"
 size="small"
 value={
-checklist[item.id]?.newPrice !== undefined && checklist[item.id].newPrice !== null
+checklist[item.id]?.newPrice !== undefined &&
+checklist[item.id].newPrice !== null
 ? checklist[item.id].newPrice
 : ''
 }
@@ -1215,11 +1299,15 @@ pattern: '[0-9]*',
 sx={{
 width: '100%',
 maxWidth: { xs: '90px', sm: '100%' },
-bgcolor: priceChanged ? '#e0f2fe' : 'transparent',
+bgcolor:
+checklist[item.id]?.newPrice &&
+parseFloat(checklist[item.id].newPrice) !== parseFloat(item.price)
+? '#e0f2fe'
+: 'transparent',
 }}
 />
 <Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
-${parseFloat(item.price).toFixed(2)}
+${parseFloat(originalPrices[item.id] !== undefined ? originalPrices[item.id] : item.price).toFixed(2)}
 </Typography>
 <Button
 variant="outlined"
@@ -1230,8 +1318,19 @@ sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
 Replace
 </Button>
 </Box>
-);
-})}
+{item.comments &&
+item.comments.length > 0 &&
+item.comments.map((entry, index) => (
+<Typography
+key={index}
+variant="caption"
+sx={{ pl: 2, color: 'grey.600', mb: 0.5 }}
+>
+Commentaire de {entry.company} : {entry.comment}
+</Typography>
+))}
+</React.Fragment>
+))}
 <Box sx={{ mt: 2, textAlign: 'right', fontWeight: 'bold' }}>
 Total: ${totalCost.toFixed(2)}
 </Box>
@@ -1603,6 +1702,7 @@ TextField,
 Checkbox,
 FormControlLabel
 } from '@mui/material';
+import { Link } from 'react-router-dom'; // Import Link for navigation
 import { useDeliveryAggregation } from '../hooks/useDeliveryAggregation';
 import AggregatedTable from './AggregatedTable';
 import SignatureOverlay from './SignatureOverlay';
@@ -1679,7 +1779,7 @@ Suivant
 </Dialog>
 );
 }
-export default function DeliveryDashboard({ user }) {
+export default function DeliveryDashboard({ user, isAdmin }) {
 // Récupération via le hook d’agrégation
 const { orders, aggregatedBySupplier, supplierInvoiceUrl, currentWeek } = useDeliveryAggregation();
 // --------------------------------------------------
@@ -1732,8 +1832,8 @@ await setDoc(newDocRef, {
 weekCode: wc,
 productId,
 collected: true,
-collectedQuantity: 0,
-newPrice: 0,
+collectedQuantity: null,
+newPrice: null,
 createdAt: serverTimestamp(),
 updatedAt: serverTimestamp()
 });
@@ -2036,6 +2136,12 @@ return (
 <Typography variant="h4" gutterBottom>
 Tableau de bord des livraisons
 </Typography>
+{/* Admin-only button: visible only if isAdmin prop is true */}
+{isAdmin && (
+<Button variant="outlined" component={Link} to="/admin/products" sx={{ mb: 2 }}>
+Products Manager
+</Button>
+)}
 <Typography variant="body1" gutterBottom>
 Commandes pour la semaine : {currentWeek}
 </Typography>
@@ -2478,7 +2584,111 @@ Capture Signature
 
 
 
+# ** File: src/components/ProductEditDialog.js **
+// src/components/ProductEditDialog.js
+import React, { useState, useEffect } from 'react';
+import {
+Dialog,
+DialogTitle,
+DialogContent,
+DialogActions,
+TextField,
+FormControlLabel,
+Checkbox,
+Button,
+Box
+} from '@mui/material';
+export default function ProductEditDialog({ open, product, onClose, onSave }) {
+const [editedProduct, setEditedProduct] = useState({});
+useEffect(() => {
+if (product) {
+setEditedProduct(product);
+}
+}, [product]);
+const handleChange = (field, value) => {
+setEditedProduct(prev => ({
+...prev,
+[field]: value,
+}));
+};
+const handleCheckboxChange = (field, event) => {
+setEditedProduct(prev => ({
+...prev,
+[field]: event.target.checked,
+}));
+};
+const handleSave = () => {
+onSave(editedProduct);
+};
+return (
+<Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+<DialogTitle>Edit Product</DialogTitle>
+<DialogContent>
+<Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+<TextField
+label="Name"
+variant="outlined"
+fullWidth
+value={editedProduct.name || ''}
+onChange={(e) => handleChange('name', e.target.value)}
+/>
+<TextField
+label="Code"
+variant="outlined"
+fullWidth
+value={editedProduct.code || ''}
+onChange={(e) => handleChange('code', e.target.value)}
+/>
+<TextField
+label="Price"
+variant="outlined"
+fullWidth
+type="number"
+value={editedProduct.price || ''}
+onChange={(e) => handleChange('price', parseFloat(e.target.value))}
+/>
+<TextField
+label="Category"
+variant="outlined"
+fullWidth
+value={editedProduct.category || ''}
+onChange={(e) => handleChange('category', e.target.value)}
+/>
+<TextField
+label="Supplier"
+variant="outlined"
+fullWidth
+value={editedProduct.supplier || ''}
+onChange={(e) => handleChange('supplier', e.target.value)}
+/>
+<FormControlLabel
+control={
+<Checkbox
+checked={editedProduct.available || false}
+onChange={(e) => handleCheckboxChange('available', e)}
+/>
+}
+label="Available"
+/>
+{/* Add any additional product fields as needed */}
+</Box>
+</DialogContent>
+<DialogActions>
+<Button onClick={onClose} color="secondary">
+Cancel
+</Button>
+<Button onClick={handleSave} variant="contained" color="primary">
+Save
+</Button>
+</DialogActions>
+</Dialog>
+);
+}
+
+
+
 # ** File: src/components/Basket.js **
+// src/components/Basket.js
 import React, { useState, useEffect } from 'react';
 import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/material';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
@@ -2486,9 +2696,9 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBasketItem, saveOrder, isOrderAllowed }) {
 const [expanded, setExpanded] = useState(false);
-// État local pour suivre l'affichage du champ de commentaire pour chaque article.
+// Local state to track which item comments are open
 const [commentOpen, setCommentOpen] = useState({});
-// Lorsque le panier change, s'assurer que les articles avec un commentaire existant soient ouverts par défaut.
+// When the basket changes, ensure that items with an existing comment have their comment field open
 useEffect(() => {
 setCommentOpen(prev => {
 const newState = { ...prev };
@@ -2504,9 +2714,9 @@ const toggleExpand = () => setExpanded(!expanded);
 const toggleComment = (id) => {
 setCommentOpen(prev => ({ ...prev, [id]: !prev[id] }));
 };
-const totalCost = basket
-.reduce((acc, item) => acc + item.price * item.quantity, 0)
-.toFixed(2);
+// Calculate the total as a number and also as a formatted string
+const totalCostValue = basket.reduce((acc, item) => acc + item.price * item.quantity, 0);
+const totalCost = totalCostValue.toFixed(2);
 return (
 <Box
 sx={{
@@ -2585,6 +2795,16 @@ onChange={(e) => updateBasketItemComment(item.id, e.target.value)}
 </>
 )}
 </Box>
+{/* New message if total cost is under $400 */}
+{basket.length > 0 && totalCostValue < 400 && (
+<Typography
+variant="caption"
+color="error"
+sx={{ mt: 1, display: 'block', fontSize: '1rem' }}
+>
+On n’est pas encore à 400$, c'est le minimum pour la livraison.
+</Typography>
+)}
 {basket.length > 0 && (
 <>
 {!isOrderAllowed && (
@@ -2963,16 +3183,135 @@ export default ProductsPage;
 
 
 
+# ** File: src/components/ProductsManager.js **
+// src/components/ProductsManager.js
+import React, { useState, useEffect } from 'react';
+import { collection, query, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { firestore } from '../firebase';
+import { Container, Typography, Box, List, ListItem, ListItemText, Divider, Button } from '@mui/material';
+import FilterBar from './FilterBar';
+import ProductEditDialog from './ProductEditDialog';
+import AddProductDialog from './AddProductDialog';
+export default function ProductsManager({ user }) {
+const [products, setProducts] = useState([]);
+const [searchTerm, setSearchTerm] = useState('');
+const [selectedCategory, setSelectedCategory] = useState('');
+const [selectedSupplier, setSelectedSupplier] = useState('');
+const [bioOnly, setBioOnly] = useState(false);
+const [selectedProduct, setSelectedProduct] = useState(null);
+const [refreshToggle, setRefreshToggle] = useState(false);
+const [addDialogOpen, setAddDialogOpen] = useState(false);
+// Fetch all products (admins see everything)
+useEffect(() => {
+const productsRef = collection(firestore, 'products');
+const q = query(productsRef);
+const unsubscribe = onSnapshot(q, (snapshot) => {
+const prods = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+setProducts(prods);
+});
+return () => unsubscribe();
+}, [refreshToggle]);
+// Prepare filter options
+const distinctCategories = Array.from(new Set(products.map(p => p.category))).sort();
+const distinctSuppliers = Array.from(new Set(products.map(p => p.supplier))).sort();
+const filteredProducts = products.filter(product => {
+const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase());
+const matchesCategory = selectedCategory ? product.category === selectedCategory : true;
+const matchesSupplier = selectedSupplier ? product.supplier === selectedSupplier : true;
+const matchesBio = bioOnly ? product.bio === true : true;
+return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
+});
+const handleProductClick = (product) => {
+setSelectedProduct(product);
+};
+const handleDialogClose = () => {
+setSelectedProduct(null);
+};
+const handleProductSave = async (updatedProduct) => {
+try {
+await updateDoc(doc(firestore, 'products', updatedProduct.id), updatedProduct);
+setRefreshToggle(!refreshToggle);
+setSelectedProduct(null);
+} catch (error) {
+console.error("Error updating product:", error);
+}
+};
+const handleAddProduct = (product) => {
+// When a new product is added, refresh list and close the dialog
+setRefreshToggle(!refreshToggle);
+setAddDialogOpen(false);
+};
+return (
+<Container sx={{ pt: 4, pb: 4 }}>
+<Typography variant="h4" gutterBottom>
+Products Manager
+</Typography>
+{/* Add New Product button */}
+<Box sx={{ mb: 2 }}>
+<Button variant="contained" color="primary" onClick={() => setAddDialogOpen(true)}>
+Add New Product
+</Button>
+</Box>
+<FilterBar
+searchTerm={searchTerm}
+setSearchTerm={setSearchTerm}
+selectedCategory={selectedCategory}
+setSelectedCategory={setSelectedCategory}
+selectedSupplier={selectedSupplier}
+setSelectedSupplier={setSelectedSupplier}
+bioOnly={bioOnly}
+setBioOnly={setBioOnly}
+distinctCategories={distinctCategories}
+distinctSuppliers={distinctSuppliers}
+/>
+<Box sx={{ mt: 2 }}>
+{filteredProducts.length === 0 ? (
+<Typography>No products found.</Typography>
+) : (
+<List>
+{filteredProducts.map(product => (
+<React.Fragment key={product.id}>
+<ListItem button onClick={() => handleProductClick(product)}>
+<ListItemText
+primary={product.name}
+secondary={`Code: ${product.code || '-'} | Price: $${parseFloat(product.price).toFixed(2)} | Available: ${product.available ? 'Yes' : 'No'}`}
+/>
+</ListItem>
+<Divider />
+</React.Fragment>
+))}
+</List>
+)}
+</Box>
+{selectedProduct && (
+<ProductEditDialog
+open={Boolean(selectedProduct)}
+product={selectedProduct}
+onClose={handleDialogClose}
+onSave={handleProductSave}
+/>
+)}
+{/* Dialog for adding a new product */}
+{addDialogOpen && (
+<AddProductDialog
+open={addDialogOpen}
+onClose={() => setAddDialogOpen(false)}
+onProductSelect={handleAddProduct}
+defaultMode="manual"
+/>
+)}
+</Container>
+);
+}
+
+
+
 # ** File: src/hooks/useDeliveryAggregation.js **
 // src/hooks/useDeliveryAggregation.js
 import { useEffect, useState } from 'react';
 import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import { getWeekCode } from '../utils/dateUtils';
-/**
-* A custom hook that fetches and aggregates orders, plus checks for supplier invoices.
-* Returns { orders, aggregatedBySupplier, supplierInvoiceUrl, reloadInvoices }
-*/
 export function useDeliveryAggregation() {
 const [orders, setOrders] = useState([]);
 const [aggregatedBySupplier, setAggregatedBySupplier] = useState({});
@@ -2993,24 +3332,39 @@ return () => unsub();
 useEffect(() => {
 const newAggregated = {};
 orders.forEach(order => {
+// Suppose we store a "companyName" in the order doc
+// or we fall back to the order's email:
+const company = order.companyName || order.email || "Unknown";
 if (order.items) {
 order.items.forEach(item => {
 const supplier = item.supplier || 'Unknown';
+// Initialize that supplier if missing
 if (!newAggregated[supplier]) {
 newAggregated[supplier] = {};
 }
+// If this product doesn't exist yet in the aggregator, create it
 if (!newAggregated[supplier][item.id]) {
-newAggregated[supplier][item.id] = { ...item };
+newAggregated[supplier][item.id] = {
+...item,
+comments: []  // store array of {company, comment}
+};
 } else {
+// If it already exists, just increment quantity
 newAggregated[supplier][item.id].quantity += item.quantity;
+}
+// If there's a comment, push {company, comment} object
+if (item.comment && item.comment.trim() !== "") {
+newAggregated[supplier][item.id].comments.push({
+company,
+comment: item.comment
+});
 }
 });
 }
 });
 setAggregatedBySupplier(newAggregated);
 }, [orders]);
-// 3) Check if there's an uploaded invoice in Firestore for each supplier
-//    Provide a function so we can reload if needed
+// 3) (Optional) Check for uploaded invoices
 async function reloadInvoices(aggregatedObj) {
 for (const supplier of Object.keys(aggregatedObj)) {
 const docId = `${currentWeek}_${supplier}`;

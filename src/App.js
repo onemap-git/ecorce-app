@@ -7,79 +7,69 @@ import Login from './components/Login';
 import ProductsPage from './components/ProductsPage';
 import OrderHistory from './components/OrderHistory';
 import DeliveryDashboard from './components/DeliveryDashboard';
+import ProductsManager from './components/ProductsManager'; // NEW: Products Manager for admins
 
 function App() {
   const [user, setUser] = useState(null);
   const [isDelivery, setIsDelivery] = useState(false);
-  const [loading, setLoading] = useState(true); // New loading state
+  const [isAdmin, setIsAdmin] = useState(false); // admin flag
+  const [loading, setLoading] = useState(true); // loading state
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (u) => {
       setUser(u);
       if (u) {
-        // Check if user is a delivery person
+        // Fetch the user document from Firestore
         const userDocRef = doc(firestore, 'users', u.uid);
         const snap = await getDoc(userDocRef);
         if (snap.exists()) {
           const data = snap.data();
-          if (data.delivery === true) {
-            console.log('Is delivery');
-            setIsDelivery(true);
-          } else {
-            setIsDelivery(false);
-          }
+          setIsDelivery(data.delivery === true);
+          setIsAdmin(data.admin === true); // set admin flag based on user doc
         } else {
           setIsDelivery(false);
+          setIsAdmin(false);
         }
       } else {
         setIsDelivery(false);
+        setIsAdmin(false);
       }
-      setLoading(false); // Loading complete after auth & fetch check
+      setLoading(false);
     });
     return () => unsub();
   }, []);
 
   if (loading) {
-    // Render a loading indicator or nothing until the state is determined
+    // Render a loading indicator until auth and user data are loaded
     return <div>Loading...</div>;
   }
 
   return (
     <Router>
       <Routes>
-        {/* Public or login */}
-        <Route
-          path="/login"
-          element={user ? <Navigate to="/" /> : <Login />}
-        />
-
-        {/* Normal user path */}
+        {/* Public route for login */}
+        <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+        {/* Normal user route */}
         <Route
           path="/"
           element={user ? <ProductsPage user={user} isDelivery={isDelivery} /> : <Navigate to="/login" />}
         />
-
-        <Route
-          path="/orders"
-          element={user ? <OrderHistory user={user} /> : <Navigate to="/login" />}
-        />
-
-        {/* Delivery path (only accessible if user isDelivery) */}
+        <Route path="/orders" element={user ? <OrderHistory user={user} /> : <Navigate to="/login" />} />
+        {/* Delivery route */}
         <Route
           path="/delivery"
-          element={
-            user && isDelivery
-              ? <DeliveryDashboard user={user} />
-              : <Navigate to="/" />
-          }
+          element={user && isDelivery ? <DeliveryDashboard user={user} isAdmin={isAdmin} /> : <Navigate to="/" />}
         />
-
-        {/* Fallback */}
+        {/* Admin Products Manager route */}
+        <Route
+          path="/admin/products"
+          element={user && isAdmin ? <ProductsManager user={user} /> : <Navigate to="/" />}
+        />
+        {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </Router>
   );
 }
-
 
 export default App;

@@ -36,7 +36,7 @@ function ProductRow({ product, addToBasket, style, columnWidths }) {
       </TableCell>
       <TableCell sx={{ width: columnWidths.add }}>
         <Button variant="contained" onClick={handleAdd}>
-          Add
+          Ajouter
         </Button>
       </TableCell>
     </TableRow>

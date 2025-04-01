@@ -34,10 +34,10 @@ function Login() {
     try {
       await sendSignInLinkToEmail(auth, email, actionCodeSettings);
       window.localStorage.setItem('emailForSignIn', email);
-      setMessage('Login link sent to your email!');
+      setMessage('Lien de connexion envoyé à votre adresse courriel!');
     } catch (error) {
       console.error(error);
-      setMessage('Error sending email link');
+      setMessage("Erreur lors de l'envoi du lien de connexion");
     }
   };
 
@@ -45,7 +45,7 @@ function Login() {
     <Container maxWidth="sm">
       <Box sx={{ mt: 8, p: 4, boxShadow: 3, borderRadius: 2 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Login
+          Connexion
         </Typography>
         <form onSubmit={handleSubmit}>
           <TextField
@@ -59,7 +59,7 @@ function Login() {
             required
           />
           <Button variant="contained" color="primary" type="submit" fullWidth>
-            Send Login Link
+            Envoyer le lien de connexion
           </Button>
         </form>
         {message && <Alert severity="info" sx={{ mt: 2 }}>{message}</Alert>}
