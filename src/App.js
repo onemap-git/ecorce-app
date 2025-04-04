@@ -8,6 +8,7 @@ import ProductsPage from './components/ProductsPage';
 import OrderHistory from './components/OrderHistory';
 import DeliveryDashboard from './components/DeliveryDashboard';
 import ProductsManager from './components/ProductsManager'; // NEW: Products Manager for admins
+import OrderHistoryByWeek from './components/OrderHistoryByWeek'; // NEW: Order History by Week
 
 function App() {
   const [user, setUser] = useState(null);
@@ -64,6 +65,11 @@ function App() {
         <Route
           path="/admin/products"
           element={user && isAdmin ? <ProductsManager user={user} /> : <Navigate to="/" />}
+        />
+        {/* Order History by Week route - accessible to delivery and admin users */}
+        <Route
+          path="/delivery/history"
+          element={user && (isDelivery || isAdmin) ? <OrderHistoryByWeek user={user} isAdmin={isAdmin} /> : <Navigate to="/" />}
         />
         {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" />} />

@@ -558,6 +558,16 @@ export default function DeliveryDashboard({ user, isAdmin }) {
           Products Manager
         </Button>
       )}
+      
+      {/* Historique des commandes button - visible to all delivery users (including admins) */}
+      <Button 
+        variant="outlined" 
+        component={Link} 
+        to="/delivery/history" 
+        sx={{ mb: 2, ml: isAdmin ? 2 : 0 }}
+      >
+        Historique des commandes
+      </Button>
 
       <Typography variant="body1" gutterBottom>
         Commandes pour la semaine : {currentWeek}

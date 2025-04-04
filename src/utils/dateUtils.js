@@ -21,4 +21,21 @@ export function getHumanReadableWeek(date) {
   
   return `Semaine du ${formattedDate}`;
 }
+
+export function getDateFromWeekCode(weekCode) {
+  const [weekNumber, year] = weekCode.split('-').map(Number);
+  
+  const firstThursday = new Date(year, 0, 4); // January 4th
+  const dayOfWeek = firstThursday.getDay(); // 0 = Sunday, 4 = Thursday
+  const daysToFirstThursday = dayOfWeek <= 4 ? 4 - dayOfWeek : 11 - dayOfWeek;
+  firstThursday.setDate(firstThursday.getDate() + daysToFirstThursday);
+  
+  const targetThursday = new Date(firstThursday);
+  targetThursday.setDate(firstThursday.getDate() + (weekNumber - 1) * 7);
+  
+  const monday = new Date(targetThursday);
+  monday.setDate(targetThursday.getDate() - 3); // Thursday to Monday is -3 days
+  
+  return monday;
+}
   
