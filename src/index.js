@@ -9,6 +9,15 @@ const theme = createTheme({
   typography: {
     fontFamily: 'Space Grotesk, sans-serif',
   },
+  components: {
+    MuiContainer: {
+      styleOverrides: {
+        root: {
+          maxWidth: 'none !important',
+        },
+      },
+    },
+  },
 });
 
 const root = ReactDOM.createRoot(document.getElementById('root'));

@@ -1,5 +1,5 @@
 // src/components/VirtualizedProductsTable.js
-import React from 'react';
+import React, { useState } from 'react';
 import { FixedSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
 import { usePricing } from '../contexts/PricingContext';    // <-- NEW
@@ -22,7 +22,16 @@ const ROW_HEIGHT = 50;
  * RowRenderer: We pass getFinalPrice via itemData, so we can apply margin.
  */
 function RowRendererWithoutHeader({ index, style, data }) {
-  const { products, addToBasket, scaledColumns, getFinalPrice } = data;
+  const { 
+    products, 
+    addToBasket, 
+    scaledColumns, 
+    getFinalPrice, 
+    basket, 
+    getQuantity, 
+    updateQuantity 
+  } = data;
+  
   const product = products[index];
   if (!product) return null;
 
@@ -30,9 +39,22 @@ function RowRendererWithoutHeader({ index, style, data }) {
   const finalPrice = getFinalPrice(product.price);
   // 2) Format it
   const displayPrice = formatPrice(finalPrice);
+  
+  const isInBasket = basket ? basket.some(item => item.id === product.id) : false;
+  const quantity = getQuantity(product.id);
+
+  const handleAddToBasket = () => {
+    addToBasket(product, quantity);
+    updateQuantity(product.id, 1);
+  };
 
   return (
-    <div style={{ ...style, display: 'flex', borderBottom: '1px solid #eee' }}>
+    <div style={{ 
+      ...style, 
+      display: 'flex', 
+      borderBottom: '1px solid #eee',
+      backgroundColor: isInBasket ? 'rgba(25, 118, 210, 0.08)' : 'inherit'
+    }}>
       {/* Column 1: Bio */}
       <div
         style={{
@@ -89,7 +111,7 @@ function RowRendererWithoutHeader({ index, style, data }) {
         ${displayPrice}
       </div>
 
-      {/* Column 6: Hard-coded "1" for quantity in your example */}
+      {/* Column 6: Quantity input */}
       <div
         style={{
           width: scaledColumns[5].scaledWidth,
@@ -97,7 +119,13 @@ function RowRendererWithoutHeader({ index, style, data }) {
           boxSizing: 'border-box',
         }}
       >
-        1
+        <input 
+          type="number" 
+          min="1" 
+          value={quantity} 
+          onChange={(e) => updateQuantity(product.id, parseInt(e.target.value, 10) || 1)} 
+          style={{ width: '40px' }}
+        />
       </div>
 
       {/* Column 7: Add button */}
@@ -108,15 +136,27 @@ function RowRendererWithoutHeader({ index, style, data }) {
           boxSizing: 'border-box',
         }}
       >
-        <button onClick={() => addToBasket(product, 1)}>Ajouter</button>
+        <button onClick={handleAddToBasket}>Ajouter</button>
       </div>
     </div>
   );
 }
 
-export default function VirtualizedProductsTable({ products, addToBasket }) {
+export default function VirtualizedProductsTable({ products, addToBasket, basket }) {
   // Pull getFinalPrice from context
   const { getFinalPrice } = usePricing();
+  const [quantityMap, setQuantityMap] = useState({});
+
+  const updateQuantity = (productId, value) => {
+    setQuantityMap(prev => ({
+      ...prev,
+      [productId]: value
+    }));
+  };
+
+  const getQuantity = (productId) => {
+    return quantityMap[productId] || 1;
+  };
 
   // The rest is your existing code for layout
   const totalBaseWidth = columns.reduce((sum, col) => sum + col.baseWidth, 0);
@@ -166,8 +206,7 @@ export default function VirtualizedProductsTable({ products, addToBasket }) {
                 width={width}
                 itemCount={products.length}
                 itemSize={ROW_HEIGHT}
-                // We pass getFinalPrice in itemData so the row renderer can use it
-                itemData={{ products, addToBasket, scaledColumns, getFinalPrice }}
+                itemData={{ products, addToBasket, scaledColumns, getFinalPrice, basket, getQuantity, updateQuantity }}
               >
                 {RowRendererWithoutHeader}
               </List>

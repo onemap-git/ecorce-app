@@ -1,6 +1,7 @@
 // src/components/Basket.js
 import React, { useState, useEffect } from 'react';
-import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/material';
+import { Box, Button, Typography, IconButton, TextField, Collapse, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -11,6 +12,8 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
   const [expanded, setExpanded] = useState(false);
   const [commentOpen, setCommentOpen] = useState({});
   const { getFinalPrice } = usePricing();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
 
   useEffect(() => {
     setCommentOpen(prev => {
@@ -40,26 +43,60 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
     <Box
       sx={{
         position: 'fixed',
-        bottom: 0,
-        left: 0,
+        bottom: {
+          xs: 0,
+          lg: 'auto'
+        },
+        left: {
+          xs: 0,
+          lg: 'auto'
+        },
         right: 0,
+        top: {
+          xs: 'auto',
+          lg: 0
+        },
+        width: {
+          xs: '100%',
+          lg: '450px'
+        },
+        height: {
+          xs: 'auto',
+          lg: '100vh'
+        },
+        display: 'flex',
+        flexDirection: 'column',
         backgroundColor: 'background.paper',
-        borderTop: '1px solid',
+        borderTop: {
+          xs: '1px solid',
+          lg: 'none'
+        },
+        borderLeft: {
+          xs: 'none',
+          lg: '1px solid'
+        },
         borderColor: 'grey.300',
         p: 2,
         boxShadow: 3,
+        zIndex: 1100,
+        overflowY: {
+          xs: 'auto',
+          lg: 'auto'
+        },
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button onClick={toggleExpand} endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}>
-          {expanded ? 'Masquer le panier' : 'Afficher le panier'}
-        </Button>
-        <Typography variant="body1">
+        <Box sx={{ display: { xs: 'block', lg: 'none' } }}>
+          <Button onClick={toggleExpand} endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}>
+            {expanded ? 'Masquer le panier' : 'Afficher le panier'}
+          </Button>
+        </Box>
+        <Typography variant="body1" sx={{ ml: { lg: 'auto' }, pr: { xs: '20px' } }}>
           {basket.length} articles | Total : ${totalCost}
         </Typography>
       </Box>
-      <Collapse in={expanded}>
-        <Box sx={{ maxHeight: '50vh', overflowY: 'auto', mt: 2 }}>
+      <Collapse in={expanded || isDesktop}>
+        <Box sx={{ maxHeight: { xs: '50vh', lg: 'calc(100vh - 120px)' }, overflowY: 'auto', mt: 2 }}>
           {basket.length === 0 ? (
             <Typography>Aucun article dans le panier</Typography>
           ) : (
@@ -78,6 +115,8 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                           alignItems: 'center',
                           gap: 2,
                           flexWrap: 'wrap',
+                          position: 'relative',
+                          paddingRight: { xs: '10px', lg: '40px' }
                         }}
                       >
                         <Typography sx={{ flex: 2 }}>
@@ -94,12 +133,26 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                           size="small"
                           sx={{ width: '60px' }}
                         />
-                        <IconButton onClick={() => removeBasketItem(item.id)}>
-                          <RemoveCircleOutlineIcon />
-                        </IconButton>
-                        <Button variant="text" onClick={() => toggleComment(item.id)}>
+                        <Button 
+                          variant="text" 
+                          onClick={() => toggleComment(item.id)}
+                          sx={{ 
+                            marginRight: { xs: 0, lg: '40px' }
+                          }}
+                        >
                           {commentOpen[item.id] ? 'Masquer le commentaire' : 'Ajouter un commentaire'}
                         </Button>
+                        <IconButton 
+                          onClick={() => removeBasketItem(item.id)}
+                          sx={{ 
+                            position: { xs: 'static', lg: 'absolute' }, 
+                            right: { lg: 0 },
+                            top: { lg: '50%' },
+                            transform: { lg: 'translateY(-50%)' }
+                          }}
+                        >
+                          <RemoveCircleOutlineIcon />
+                        </IconButton>
                       </Box>
                       {commentOpen[item.id] && (
                         <TextField
