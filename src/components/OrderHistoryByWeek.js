@@ -14,7 +14,7 @@ import {
 } from '@mui/material';
 import OrderCard from './OrderCard';
 import DeliveredOrderCard from './DeliveredOrderCard';
-import { getWeekCode, getHumanReadableWeek } from '../utils/dateUtils';
+import { getWeekCode, getHumanReadableWeek, getDateFromWeekCode } from '../utils/dateUtils';
 
 export default function OrderHistoryByWeek({ user, isAdmin }) {
   const [orders, setOrders] = useState([]);
@@ -78,7 +78,7 @@ export default function OrderHistoryByWeek({ user, isAdmin }) {
         >
           {availableWeeks.map((week) => (
             <MenuItem key={week} value={week}>
-              {getHumanReadableWeek(new Date(week.split('-')[1], 0, 1))} (Code: {week})
+              {getHumanReadableWeek(getDateFromWeekCode(week))} (Code: {week})
             </MenuItem>
           ))}
         </Select>
