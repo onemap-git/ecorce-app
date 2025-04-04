@@ -116,7 +116,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                           gap: 2,
                           flexWrap: 'wrap',
                           position: 'relative',
-                          paddingRight: { lg: '40px' }
+                          paddingRight: { xs: '10px', lg: '40px' }
                         }}
                       >
                         <Typography sx={{ flex: 2 }}>
