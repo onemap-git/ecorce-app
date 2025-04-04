@@ -9,14 +9,32 @@ import { formatPrice } from '../utils/formatPrice';          // <-- NEW
 
 function MobileProductsList({ products, addToBasket, basket }) {
   const { getFinalPrice } = usePricing();
+  const [quantityMap, setQuantityMap] = useState({});
+
+  const updateQuantity = (productId, value) => {
+    setQuantityMap(prev => ({
+      ...prev,
+      [productId]: value
+    }));
+  };
+
+  const getQuantity = (productId) => {
+    return quantityMap[productId] || 1;
+  };
+
+  const handleAddToBasket = (product) => {
+    const quantity = getQuantity(product.id);
+    addToBasket(product, quantity);
+    updateQuantity(product.id, 1);
+  };
 
   return (
     <List>
       {products.map((product) => {
         const finalPrice = getFinalPrice(product.price);
         const displayPrice = formatPrice(finalPrice);
-        const [quantity, setQuantity] = useState(1);
         const isInBasket = basket ? basket.some(item => item.id === product.id) : false;
+        const quantity = getQuantity(product.id);
 
         return (
           <ListItem
@@ -44,15 +62,12 @@ function MobileProductsList({ products, addToBasket, basket }) {
               <TextField
                 type="number"
                 value={quantity}
-                onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+                onChange={(e) => updateQuantity(product.id, parseInt(e.target.value, 10) || 1)}
                 inputProps={{ min: 1 }}
                 size="small"
                 sx={{ width: '60px' }}
               />
-              <Button variant="contained" onClick={() => {
-                addToBasket(product, quantity);
-                setQuantity(1);
-              }}>
+              <Button variant="contained" onClick={() => handleAddToBasket(product)}>
                 Ajouter
               </Button>
             </Box>

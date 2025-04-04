@@ -22,9 +22,17 @@ const ROW_HEIGHT = 50;
  * RowRenderer: We pass getFinalPrice via itemData, so we can apply margin.
  */
 function RowRendererWithoutHeader({ index, style, data }) {
-  const { products, addToBasket, scaledColumns, getFinalPrice, basket } = data;
+  const { 
+    products, 
+    addToBasket, 
+    scaledColumns, 
+    getFinalPrice, 
+    basket, 
+    getQuantity, 
+    updateQuantity 
+  } = data;
+  
   const product = products[index];
-  const [quantity, setQuantity] = useState(1);
   if (!product) return null;
 
   // 1) Apply margin
@@ -33,6 +41,12 @@ function RowRendererWithoutHeader({ index, style, data }) {
   const displayPrice = formatPrice(finalPrice);
   
   const isInBasket = basket ? basket.some(item => item.id === product.id) : false;
+  const quantity = getQuantity(product.id);
+
+  const handleAddToBasket = () => {
+    addToBasket(product, quantity);
+    updateQuantity(product.id, 1);
+  };
 
   return (
     <div style={{ 
@@ -109,7 +123,7 @@ function RowRendererWithoutHeader({ index, style, data }) {
           type="number" 
           min="1" 
           value={quantity} 
-          onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)} 
+          onChange={(e) => updateQuantity(product.id, parseInt(e.target.value, 10) || 1)} 
           style={{ width: '40px' }}
         />
       </div>
@@ -122,10 +136,7 @@ function RowRendererWithoutHeader({ index, style, data }) {
           boxSizing: 'border-box',
         }}
       >
-        <button onClick={() => {
-          addToBasket(product, quantity);
-          setQuantity(1);
-        }}>Ajouter</button>
+        <button onClick={handleAddToBasket}>Ajouter</button>
       </div>
     </div>
   );
@@ -134,6 +145,18 @@ function RowRendererWithoutHeader({ index, style, data }) {
 export default function VirtualizedProductsTable({ products, addToBasket, basket }) {
   // Pull getFinalPrice from context
   const { getFinalPrice } = usePricing();
+  const [quantityMap, setQuantityMap] = useState({});
+
+  const updateQuantity = (productId, value) => {
+    setQuantityMap(prev => ({
+      ...prev,
+      [productId]: value
+    }));
+  };
+
+  const getQuantity = (productId) => {
+    return quantityMap[productId] || 1;
+  };
 
   // The rest is your existing code for layout
   const totalBaseWidth = columns.reduce((sum, col) => sum + col.baseWidth, 0);
@@ -183,8 +206,7 @@ export default function VirtualizedProductsTable({ products, addToBasket, basket
                 width={width}
                 itemCount={products.length}
                 itemSize={ROW_HEIGHT}
-                // We pass getFinalPrice in itemData so the row renderer can use it
-                itemData={{ products, addToBasket, scaledColumns, getFinalPrice, basket }}
+                itemData={{ products, addToBasket, scaledColumns, getFinalPrice, basket, getQuantity, updateQuantity }}
               >
                 {RowRendererWithoutHeader}
               </List>
