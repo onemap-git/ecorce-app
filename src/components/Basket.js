@@ -40,14 +40,46 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
     <Box
       sx={{
         position: 'fixed',
-        bottom: 0,
-        left: 0,
+        bottom: {
+          xs: 0,
+          lg: 'auto'
+        },
+        left: {
+          xs: 0,
+          lg: 'auto'
+        },
         right: 0,
+        top: {
+          xs: 'auto',
+          lg: 0
+        },
+        width: {
+          xs: '100%',
+          lg: '300px'
+        },
+        height: {
+          xs: 'auto',
+          lg: '100vh'
+        },
+        display: 'flex',
+        flexDirection: 'column',
         backgroundColor: 'background.paper',
-        borderTop: '1px solid',
+        borderTop: {
+          xs: '1px solid',
+          lg: 'none'
+        },
+        borderLeft: {
+          xs: 'none',
+          lg: '1px solid'
+        },
         borderColor: 'grey.300',
         p: 2,
         boxShadow: 3,
+        zIndex: 1100,
+        overflowY: {
+          xs: 'auto',
+          lg: 'auto'
+        },
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -58,8 +90,8 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
           {basket.length} articles | Total : ${totalCost}
         </Typography>
       </Box>
-      <Collapse in={expanded}>
-        <Box sx={{ maxHeight: '50vh', overflowY: 'auto', mt: 2 }}>
+      <Collapse in={expanded || window.innerWidth >= 1028}>
+        <Box sx={{ maxHeight: { xs: '50vh', lg: 'calc(100vh - 120px)' }, overflowY: 'auto', mt: 2 }}>
           {basket.length === 0 ? (
             <Typography>Aucun article dans le panier</Typography>
           ) : (

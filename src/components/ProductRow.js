@@ -3,7 +3,7 @@ import { TableRow, TableCell, TextField, Button } from '@mui/material';
 import { formatPrice } from '../utils/formatPrice';
 import { usePricing } from '../contexts/PricingContext';
 
-function ProductRow({ product, addToBasket, style, columnWidths }) {
+function ProductRow({ product, addToBasket, style, columnWidths, basket }) {
   const [quantity, setQuantity] = useState(1);
   // Get the pricing functions from context
   const { getFinalPrice } = usePricing();
@@ -13,13 +13,20 @@ function ProductRow({ product, addToBasket, style, columnWidths }) {
     return null;
   }
 
+  const isInBasket = basket ? basket.some(item => item.id === product.id) : false;
+
   const handleAdd = () => {
     addToBasket(product, parseInt(quantity, 10));
     setQuantity(1);
   };
 
   return (
-    <TableRow style={style}>
+    <TableRow 
+      style={{ 
+        ...style, 
+        backgroundColor: isInBasket ? 'rgba(25, 118, 210, 0.08)' : 'inherit' 
+      }}
+    >
       <TableCell sx={{ width: columnWidths.name }}>{product.name}</TableCell>
       <TableCell sx={{ width: columnWidths.category }}>{product.category}</TableCell>
       <TableCell sx={{ width: columnWidths.bio }}>{product.bio ? "Yes" : "No"}</TableCell>

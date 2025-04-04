@@ -26,7 +26,7 @@ import { auth } from '../firebase';
 import FilterBar from './FilterBar';
 import ResponsiveProductsView from './ResponsiveProductsView';
 import Basket from './Basket';
-import { getWeekCode } from '../utils/dateUtils';
+import { getWeekCode, getHumanReadableWeek } from '../utils/dateUtils';
 
 function ProductsPage({ user, isDelivery }) {
   // --- State for products, basket, user address, etc.
@@ -53,6 +53,7 @@ function ProductsPage({ user, isDelivery }) {
 
   // Current week code
   const currentWeek = getWeekCode(today);
+  const humanReadableWeek = getHumanReadableWeek(today);
 
   // ------------------------------------------------------------------
   //  1) Retrieve user's address from "res_partner"
@@ -305,7 +306,7 @@ function ProductsPage({ user, isDelivery }) {
   //  Render
   // ------------------------------------------------------------------
   return (
-    <Container sx={{ pt: 4, pb: 10 }}>
+    <Container sx={{ pt: 4, pb: { xs: 10, lg: 2 }, pr: { xs: 2, lg: '320px' } }}>
       {/* Header / Logo / Buttons */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box>
@@ -340,7 +341,7 @@ function ProductsPage({ user, isDelivery }) {
                 </Typography>
               )}
               <Typography variant="body2" sx={{ color: 'text.secondary', mt: 1 }}>
-                Semaine: {currentWeek}
+                {humanReadableWeek}
               </Typography>
             </>
           )}
@@ -366,6 +367,7 @@ function ProductsPage({ user, isDelivery }) {
         <ResponsiveProductsView
           products={sortedFilteredProducts}
           addToBasket={addToBasket}
+          basket={basket}
         />
       </Box>
 

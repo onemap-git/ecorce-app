@@ -1,13 +1,13 @@
 // src/components/ResponsiveProductsView.js
-import React from 'react';
+import React, { useState } from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { List, ListItem, Typography, Box, Button } from '@mui/material';
+import { List, ListItem, Typography, Box, Button, TextField } from '@mui/material';
 import VirtualizedProductsTable from './VirtualizedProductsTable';
 import { usePricing } from '../contexts/PricingContext';    // <-- NEW
 import { formatPrice } from '../utils/formatPrice';          // <-- NEW
 
-function MobileProductsList({ products, addToBasket }) {
+function MobileProductsList({ products, addToBasket, basket }) {
   const { getFinalPrice } = usePricing();
 
   return (
@@ -15,6 +15,8 @@ function MobileProductsList({ products, addToBasket }) {
       {products.map((product) => {
         const finalPrice = getFinalPrice(product.price);
         const displayPrice = formatPrice(finalPrice);
+        const [quantity, setQuantity] = useState(1);
+        const isInBasket = basket ? basket.some(item => item.id === product.id) : false;
 
         return (
           <ListItem
@@ -23,7 +25,8 @@ function MobileProductsList({ products, addToBasket }) {
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'flex-start',
-              borderBottom: '1px solid #eee'
+              borderBottom: '1px solid #eee',
+              backgroundColor: isInBasket ? 'rgba(25, 118, 210, 0.08)' : 'inherit'
             }}
           >
             <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
@@ -37,8 +40,19 @@ function MobileProductsList({ products, addToBasket }) {
                 Catégorie: {product.category}
               </Typography>
             )}
-            <Box sx={{ mt: 1 }}>
-              <Button variant="contained" onClick={() => addToBasket(product, 1)}>
+            <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
+              <TextField
+                type="number"
+                value={quantity}
+                onChange={(e) => setQuantity(parseInt(e.target.value, 10) || 1)}
+                inputProps={{ min: 1 }}
+                size="small"
+                sx={{ width: '60px' }}
+              />
+              <Button variant="contained" onClick={() => {
+                addToBasket(product, quantity);
+                setQuantity(1);
+              }}>
                 Ajouter
               </Button>
             </Box>
@@ -49,13 +63,13 @@ function MobileProductsList({ products, addToBasket }) {
   );
 }
 
-export default function ResponsiveProductsView({ products, addToBasket }) {
+export default function ResponsiveProductsView({ products, addToBasket, basket }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   if (isMobile) {
-    return <MobileProductsList products={products} addToBasket={addToBasket} />;
+    return <MobileProductsList products={products} addToBasket={addToBasket} basket={basket} />;
   } else {
-    return <VirtualizedProductsTable products={products} addToBasket={addToBasket} />;
+    return <VirtualizedProductsTable products={products} addToBasket={addToBasket} basket={basket} />;
   }
 }
