@@ -55,7 +55,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
         },
         width: {
           xs: '100%',
-          lg: '300px'
+          lg: '375px'
         },
         height: {
           xs: 'auto',
@@ -83,10 +83,12 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
       }}
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Button onClick={toggleExpand} endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}>
-          {expanded ? 'Masquer le panier' : 'Afficher le panier'}
-        </Button>
-        <Typography variant="body1">
+        <Box sx={{ display: { xs: 'block', lg: 'none' } }}>
+          <Button onClick={toggleExpand} endIcon={expanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}>
+            {expanded ? 'Masquer le panier' : 'Afficher le panier'}
+          </Button>
+        </Box>
+        <Typography variant="body1" sx={{ ml: { lg: 'auto' } }}>
           {basket.length} articles | Total : ${totalCost}
         </Typography>
       </Box>
@@ -110,6 +112,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                           alignItems: 'center',
                           gap: 2,
                           flexWrap: 'wrap',
+                          position: 'relative',
                         }}
                       >
                         <Typography sx={{ flex: 2 }}>
@@ -126,12 +129,20 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                           size="small"
                           sx={{ width: '60px' }}
                         />
-                        <IconButton onClick={() => removeBasketItem(item.id)}>
-                          <RemoveCircleOutlineIcon />
-                        </IconButton>
                         <Button variant="text" onClick={() => toggleComment(item.id)}>
                           {commentOpen[item.id] ? 'Masquer le commentaire' : 'Ajouter un commentaire'}
                         </Button>
+                        <IconButton 
+                          onClick={() => removeBasketItem(item.id)}
+                          sx={{ 
+                            position: { lg: 'absolute' }, 
+                            right: { lg: 0 },
+                            top: { lg: '50%' },
+                            transform: { lg: 'translateY(-50%)' }
+                          }}
+                        >
+                          <RemoveCircleOutlineIcon />
+                        </IconButton>
                       </Box>
                       {commentOpen[item.id] && (
                         <TextField
