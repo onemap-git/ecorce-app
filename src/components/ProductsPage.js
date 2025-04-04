@@ -316,7 +316,7 @@ function ProductsPage({ user, isDelivery }) {
             Voir l'historique des commandes
           </Button>
         </Box>
-        <Box sx={{ textAlign: 'right' }}>
+        <Box sx={{ textAlign: 'right', pr: { xs: 2, lg: 3 } }}>
           {user && (
             <>
               <Typography variant="body1" sx={{ fontWeight: 'bold' }}>
