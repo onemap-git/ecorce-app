@@ -1,6 +1,7 @@
 // src/components/Basket.js
 import React, { useState, useEffect } from 'react';
-import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/material';
+import { Box, Button, Typography, IconButton, TextField, Collapse, useMediaQuery } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -11,6 +12,8 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
   const [expanded, setExpanded] = useState(false);
   const [commentOpen, setCommentOpen] = useState({});
   const { getFinalPrice } = usePricing();
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
 
   useEffect(() => {
     setCommentOpen(prev => {
@@ -92,7 +95,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
           {basket.length} articles | Total : ${totalCost}
         </Typography>
       </Box>
-      <Collapse in={expanded || window.innerWidth >= 1028}>
+      <Collapse in={expanded || isDesktop}>
         <Box sx={{ maxHeight: { xs: '50vh', lg: 'calc(100vh - 120px)' }, overflowY: 'auto', mt: 2 }}>
           {basket.length === 0 ? (
             <Typography>Aucun article dans le panier</Typography>
