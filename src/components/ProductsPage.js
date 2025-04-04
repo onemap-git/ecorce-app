@@ -306,7 +306,7 @@ function ProductsPage({ user, isDelivery }) {
   //  Render
   // ------------------------------------------------------------------
   return (
-    <Container sx={{ pt: 4, pb: { xs: 10, lg: 2 }, pr: { xs: 2, lg: '470px' }, maxWidth: '100%' }}>
+    <Container disableGutters sx={{ pt: 4, pb: { xs: 10, lg: 2 }, pr: { xs: 2, lg: '470px' }, maxWidth: 'none', width: '100%' }}>
       {/* Header / Logo / Buttons */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box>
