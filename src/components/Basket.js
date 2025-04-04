@@ -113,6 +113,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                           gap: 2,
                           flexWrap: 'wrap',
                           position: 'relative',
+                          paddingRight: { lg: '40px' }
                         }}
                       >
                         <Typography sx={{ flex: 2 }}>
@@ -129,13 +130,19 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                           size="small"
                           sx={{ width: '60px' }}
                         />
-                        <Button variant="text" onClick={() => toggleComment(item.id)}>
+                        <Button 
+                          variant="text" 
+                          onClick={() => toggleComment(item.id)}
+                          sx={{ 
+                            marginRight: { xs: 0, lg: '40px' }
+                          }}
+                        >
                           {commentOpen[item.id] ? 'Masquer le commentaire' : 'Ajouter un commentaire'}
                         </Button>
                         <IconButton 
                           onClick={() => removeBasketItem(item.id)}
                           sx={{ 
-                            position: { lg: 'absolute' }, 
+                            position: { xs: 'static', lg: 'absolute' }, 
                             right: { lg: 0 },
                             top: { lg: '50%' },
                             transform: { lg: 'translateY(-50%)' }
