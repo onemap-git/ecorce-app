@@ -36,6 +36,7 @@ import AggregatedTable from './AggregatedTable';
 import SignatureOverlay from './SignatureOverlay';
 import DeliveredOrderCard from './DeliveredOrderCard';
 import AddProductDialog from './AddProductDialog';
+import RefuseItemDialog from './RefuseItemDialog';
 import OrderCard from './OrderCard';
 import { getWeekCode } from '../utils/dateUtils';
 
@@ -220,6 +221,12 @@ export default function DeliveryDashboard({ user, isAdmin }) {
   // --------------------------------------------------
   const [addProductDialogOpen, setAddProductDialogOpen] = useState(false);
   const [selectedOrderForProductAddition, setSelectedOrderForProductAddition] = useState(null);
+  
+  // --------------------------------------------------
+  // --------------------------------------------------
+  const [refuseItemDialogOpen, setRefuseItemDialogOpen] = useState(false);
+  const [selectedItemForRefusal, setSelectedItemForRefusal] = useState(null);
+  const [selectedOrderForRefusal, setSelectedOrderForRefusal] = useState(null);
 
   // --------------------------------------------------
   //  "Replace Product" feature
@@ -287,7 +294,6 @@ export default function DeliveryDashboard({ user, isAdmin }) {
   // --------------------------------------------------
   //  Order item modifications
   // --------------------------------------------------
-  // Mettre à jour la quantité d’un item dans une commande
   const handleQuantityChange = async (orderId, itemId, newQty) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
@@ -304,6 +310,46 @@ export default function DeliveryDashboard({ user, isAdmin }) {
       });
     } catch (err) {
       console.error("Erreur lors de la mise à jour de la quantité", err);
+    }
+  };
+  
+  const handleOpenRefuseItem = (orderId, item) => {
+    setSelectedOrderForRefusal(orderId);
+    setSelectedItemForRefusal(item);
+    setRefuseItemDialogOpen(true);
+  };
+  
+  const handleCloseRefuseItem = () => {
+    setRefuseItemDialogOpen(false);
+    setSelectedItemForRefusal(null);
+    setSelectedOrderForRefusal(null);
+  };
+  
+  const handleRefuseItem = async (refusalData) => {
+    const orderId = selectedOrderForRefusal;
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const updatedItems = (order.items || []).map(item => {
+      if (item.id === refusalData.itemId) {
+        return { 
+          ...item, 
+          refused: true,
+          refusalReason: refusalData.reason,
+          refusalPhoto: refusalData.photoUrl
+        };
+      }
+      return item;
+    });
+    
+    try {
+      await updateDoc(doc(firestore, 'orders', orderId), {
+        items: updatedItems,
+        updatedAt: serverTimestamp()
+      });
+      console.log(`Article ${refusalData.itemId} refusé dans la commande ${orderId}`);
+    } catch (err) {
+      console.error("Erreur lors du refus de l'article", err);
     }
   };
 
@@ -561,6 +607,7 @@ export default function DeliveryDashboard({ user, isAdmin }) {
             onOpenSignaturePad={openSignaturePad}
             onQuantityChange={handleQuantityChange}
             onAddProduct={handleOpenAddProduct}
+            onRefuseItem={handleOpenRefuseItem}
           />
         ))
       )}
@@ -634,6 +681,14 @@ export default function DeliveryDashboard({ user, isAdmin }) {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Refuse Item Dialog */}
+      <RefuseItemDialog
+        open={refuseItemDialogOpen}
+        item={selectedItemForRefusal}
+        onClose={handleCloseRefuseItem}
+        onRefuse={handleRefuseItem}
+      />
     </Box>
   );
 }
