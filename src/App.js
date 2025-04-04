@@ -41,7 +41,7 @@ function App() {
 
   if (loading) {
     // Render a loading indicator until auth and user data are loaded
-    return <div>Loading...</div>;
+    return <div>Loading application...</div>;
   }
 
   return (
