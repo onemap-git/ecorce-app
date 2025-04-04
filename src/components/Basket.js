@@ -91,7 +91,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
             {expanded ? 'Masquer le panier' : 'Afficher le panier'}
           </Button>
         </Box>
-        <Typography variant="body1" sx={{ ml: { lg: 'auto' } }}>
+        <Typography variant="body1" sx={{ ml: { lg: 'auto' }, pr: { xs: '10px' } }}>
           {basket.length} articles | Total : ${totalCost}
         </Typography>
       </Box>
