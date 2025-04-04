@@ -308,7 +308,7 @@ function ProductsPage({ user, isDelivery }) {
   return (
     <Container disableGutters sx={{ pt: 4, pb: { xs: 10, lg: 2 }, pr: { xs: 0, lg: '470px' }, pl: 0, ml: 0, maxWidth: 'none', width: '100%' }}>
       {/* Header / Logo / Buttons */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, width: '100%', ml: 0, pl: 0 }}>
         <Box>
           <img src={Logo} alt="Logo" style={{ height: '40px', marginBottom: '10px' }} />
           <br />

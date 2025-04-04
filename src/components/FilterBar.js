@@ -126,7 +126,7 @@ export default function FilterBar({
   if (!isMobile) {
     // --- Desktop / Tablet Layout (filters inline) ---
     return (
-      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap' }}>
+      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mb: 2, flexWrap: 'wrap', ml: 0, pl: 0, width: '100%' }}>
         <TextField
           label="Rechercher"
           variant="outlined"
