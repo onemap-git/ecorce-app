@@ -55,7 +55,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
         },
         width: {
           xs: '100%',
-          lg: '375px'
+          lg: '450px'
         },
         height: {
           xs: 'auto',
