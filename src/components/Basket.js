@@ -4,13 +4,14 @@ import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/m
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { usePricing } from '../contexts/PricingContext';
+import { formatPrice } from '../utils/formatPrice';
 
 function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBasketItem, saveOrder, isOrderAllowed }) {
   const [expanded, setExpanded] = useState(false);
-  // Local state to track which item comments are open
   const [commentOpen, setCommentOpen] = useState({});
+  const { getFinalPrice } = usePricing();
 
-  // When the basket changes, ensure that items with an existing comment have their comment field open
   useEffect(() => {
     setCommentOpen(prev => {
       const newState = { ...prev };
@@ -28,8 +29,11 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
     setCommentOpen(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  // Calculate the total as a number and also as a formatted string
-  const totalCostValue = basket.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  // Compute total cost using the final (margin-adjusted) price
+  const totalCostValue = basket.reduce((acc, item) => {
+    const finalPrice = getFinalPrice(item.price);
+    return acc + finalPrice * item.quantity;
+  }, 0);
   const totalCost = totalCostValue.toFixed(2);
 
   return (
@@ -63,7 +67,9 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
               {[...basket]
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((item) => {
-                  const lineTotal = (item.price * item.quantity).toFixed(2);
+                  const finalPrice = getFinalPrice(item.price);
+                  const formattedPrice = formatPrice(finalPrice);
+                  const lineTotal = (finalPrice * item.quantity).toFixed(2);
                   return (
                     <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', mb: 1, gap: 1 }}>
                       <Box
@@ -75,7 +81,7 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
                         }}
                       >
                         <Typography sx={{ flex: 2 }}>
-                          {item.name} - ${parseFloat(item.price).toFixed(2)}
+                          {item.name} - ${formattedPrice}
                         </Typography>
                         <Typography sx={{ width: '100px', textAlign: 'right' }}>
                           ${lineTotal}
@@ -110,7 +116,6 @@ function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBaske
             </>
           )}
         </Box>
-        {/* New message if total cost is under $400 */}
         {basket.length > 0 && totalCostValue < 400 && (
           <Typography
             variant="caption"

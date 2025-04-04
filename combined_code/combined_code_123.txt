@@ -1,85 +1,84 @@
 # Combined source code for commit: 123
-# Generated on: 2025-04-01 08:05:45
+# Generated on: 2025-04-02 06:37:58
 
 
 
 # ** File: functions/index.js **
-// 1) Import Functions + Admin SDK
+// functions/index.js
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { logger } = require('firebase-functions');
 const admin = require('firebase-admin');
-// 2) Initialize Admin if not already
 admin.initializeApp();
-// 3) Access Firestore via admin
 const db = admin.firestore();
 /**
-* Triggers whenever a `delivery_checklist/{docId}` doc is created/updated/deleted.
-* If a new numeric value is set in the `newPrice` field, it updates all non-delivered orders.
-* If `newPrice` is cleared (non-numeric) after having been set, it reverts to the product's default price.
+* Helper function to fetch the margin from Firestore.
+* Returns 0 if no margin is set.
+*/
+async function getMargin() {
+const marginSnap = await db.collection('settings').doc('sales').get();
+return marginSnap.exists ? marginSnap.data().margin || 0 : 0;
+}
+/**
+* Helper function to apply the margin to a given base price.
+* @param {number} basePrice - The original price.
+* @param {number} margin - The margin percentage.
+* @returns {number} The final price.
+*/
+function applyMargin(basePrice, margin) {
+return basePrice * (1 + margin / 100);
+}
+/**
+* Cloud Function to update all non-delivered orders with a new price (or revert to default).
 */
 exports.applyPriceChangeToAllOrders = onDocumentWritten(
-{
-document: 'delivery_checklist/{docId}',
-},
+{ document: 'delivery_checklist/{docId}' },
 async (event) => {
-// If the document was deleted, exit.
 if (!event.data.after) {
 return null;
 }
-// Get old and new data.
 const oldData = event.data.before?.data() || {};
 const newData = event.data.after.data() || {};
-// Must have a productId.
 if (!newData.productId) {
 logger.info('No productId in new data, skipping...');
 return null;
 }
-// Must have a weekCode.
 const weekCode = newData.weekCode;
 if (!weekCode) {
 logger.info('No weekCode in new data, skipping...');
 return null;
 }
 const productId = newData.productId;
-// Determine whether newPrice is numeric.
 const newPriceIsNumeric = typeof newData.newPrice === 'number';
 const oldPriceIsNumeric = typeof oldData.newPrice === 'number';
-// If newPrice hasn't changed, do nothing.
 if (newData.newPrice === oldData.newPrice) {
 logger.info('newPrice did not change, skipping...');
 return null;
 }
-// Decide which price to apply.
 let priceToApply;
 if (newPriceIsNumeric) {
-// When a new numeric price is provided, use it.
 priceToApply = newData.newPrice;
-logger.info(`Applying new price ${priceToApply} for product ${productId}`);
+logger.info(`Applying new base price ${priceToApply} for product ${productId}`);
 } else {
-// When newPrice is cleared, revert only if there was a prior override.
 if (!oldPriceIsNumeric) {
 logger.info('newPrice is not numeric and no prior override, skipping revert.');
 return null;
 }
-// Fetch the product's default price from Firestore.
 const productSnap = await db.collection('products').doc(productId).get();
 if (!productSnap.exists) {
 logger.info(`Product ${productId} not found; cannot revert price.`);
 return null;
 }
 priceToApply = productSnap.data().price;
-logger.info(`Reverting price for product ${productId} to default ${priceToApply}`);
+logger.info(`Reverting price for product ${productId} to base price ${priceToApply}`);
 }
-// 4) Query the "orders" collection for orders matching the weekCode.
-const ordersSnap = await db
-.collection('orders')
-.where('weekCode', '==', weekCode)
-.get();
+// Fetch the margin and apply it
+const margin = await getMargin();
+priceToApply = applyMargin(priceToApply, margin);
+const ordersSnap = await db.collection('orders').where('weekCode', '==', weekCode).get();
 if (ordersSnap.empty) {
 logger.info(`No orders found for weekCode=${weekCode} to update.`);
 return null;
 }
-// 5) Filter out orders that are already delivered.
 const relevantDocs = ordersSnap.docs.filter((docSnap) => {
 const data = docSnap.data();
 return data.deliveryStatus !== 'delivered';
@@ -88,13 +87,10 @@ if (relevantDocs.length === 0) {
 logger.info('All orders are delivered or none matching. Nothing to update.');
 return null;
 }
-// 6) Batch-update all relevant (non-delivered) orders.
 const batch = db.batch();
 relevantDocs.forEach((orderDoc) => {
 const orderData = orderDoc.data();
-if (!Array.isArray(orderData.items) || orderData.items.length === 0) {
-return; // No items to update.
-}
+if (!Array.isArray(orderData.items) || orderData.items.length === 0) return;
 let changed = false;
 const updatedItems = orderData.items.map((item) => {
 if (item.id === productId) {
@@ -110,16 +106,12 @@ updatedAt: admin.firestore.FieldValue.serverTimestamp(),
 });
 }
 });
-// If no documents were updated, exit.
 if (batch._ops.length === 0) {
 logger.info('No items needed updating in non-delivered orders.');
 return null;
 }
-// 7) Commit the batch update.
 await batch.commit();
-logger.info(
-`Successfully updated non-delivered orders for product ${productId} with price ${priceToApply}.`
-);
+logger.info(`Successfully updated non-delivered orders for product ${productId} with final price ${priceToApply}.`);
 return null;
 }
 );
@@ -180,14 +172,12 @@ transform: rotate(360deg);
 
 
 # ** File: src/index.js **
-// src/index.js (example)
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
-// 1. Import MUI theme utilities
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-// 2. Create a custom theme specifying the font
+import { PricingProvider } from './contexts/PricingContext';
 const theme = createTheme({
 typography: {
 fontFamily: 'Space Grotesk, sans-serif',
@@ -196,9 +186,10 @@ fontFamily: 'Space Grotesk, sans-serif',
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
 <React.StrictMode>
-{/* 3. Wrap your entire app in ThemeProvider */}
 <ThemeProvider theme={theme}>
+<PricingProvider>
 <App />
+</PricingProvider>
 </ThemeProvider>
 </React.StrictMode>
 );
@@ -345,9 +336,40 @@ export default App;
 
 
 
+# ** File: src/contexts/PricingContext.js **
+// src/contexts/PricingContext.js
+import React, { createContext, useContext } from 'react';
+import { useMargin } from '../hooks/useMargin';
+import { applyMargin } from '../utils/pricing';
+const PricingContext = createContext({
+margin: 0,
+getFinalPrice: (price) => price,
+});
+export const PricingProvider = ({ children }) => {
+const margin = useMargin();
+const getFinalPrice = (basePrice) => applyMargin(basePrice, margin);
+return (
+<PricingContext.Provider value={{ margin, getFinalPrice }}>
+{children}
+</PricingContext.Provider>
+);
+};
+export const usePricing = () => useContext(PricingContext);
+
+
+
 # ** File: src/utils/formatPrice.js **
-export function formatPrice(value) {
-return parseFloat(value).toFixed(2);
+// src/utils/formatPrice.js
+import { applyMargin } from './pricing';
+/**
+* Formats a given price by applying the margin percentage.
+* @param {number} value - The base price.
+* @param {number} [margin=0] - The margin percentage to apply.
+* @returns {string} The final price formatted to two decimal places.
+*/
+export function formatPrice(value, margin = 0) {
+const padded = applyMargin(value, margin);
+return padded.toFixed(2);
 }
 
 
@@ -360,7 +382,11 @@ import autoTable from 'jspdf-autotable';
 import logo from '../logo.png';
 /**
 * Exports a PDF with items sorted alphabetically by 'name',
-* plus a custom header with the site logo.
+* plus a custom header with the site logo and a final total line.
+*
+* @param {Array} aggregatedItemsArray - The array of aggregated items.
+* @param {string} currentWeek - The current week code.
+* @param {string} supplierLabel - The supplier name label.
 */
 export function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierLabel) {
 // Sort items by name
@@ -369,31 +395,31 @@ const nameA = (a.name || '').toLowerCase();
 const nameB = (b.name || '').toLowerCase();
 return nameA.localeCompare(nameB);
 });
+// Create a new PDF document
 const doc = new jsPDF();
 // 2) Insert the logo at top-left corner
 //    x=10, y=10, width=30, height auto (approx)
 doc.addImage(logo, 'PNG', 10, 10, 30, 0);
 // Optionally, add a horizontal line or some text offset
 doc.setLineWidth(0.5);
-// For example, draw a line from x=10 to x=200 at y=25
+// Draw a line from x=10 to x=200 at y=25
 doc.line(10, 25, 200, 25);
 // 3) Add main title or text below the logo/line
-//    Move startY further down if needed
 let startY = 35; // move content down so it doesn't overlap
 doc.setFontSize(16);
-doc.text(`Aggregated Products - Week ${currentWeek}`, 14, startY);
+doc.text(`Produits agrégés – Semaine ${currentWeek}`, 14, startY);
 startY += 10;
 doc.setFontSize(12);
 if (supplierLabel) {
-doc.text(`Supplier: ${supplierLabel}`, 14, startY);
+doc.text(`Fournisseur: ${supplierLabel}`, 14, startY);
 startY += 10;
 }
 // 4) Prepare columns
 const columns = [
-{ header: 'ID - Name', dataKey: 'name' },
-{ header: 'Qty', dataKey: 'quantity' },
-{ header: 'Price', dataKey: 'price' },
-{ header: 'Line Total', dataKey: 'total' },
+{ header: 'ID - Nom', dataKey: 'name' },
+{ header: 'Qtée', dataKey: 'quantity' },
+{ header: 'Prix', dataKey: 'price' },
+{ header: 'Total', dataKey: 'total' },
 ];
 // 5) Prepare row data for autoTable
 const rows = sortedItems.map((item) => ({
@@ -411,7 +437,15 @@ styles: { fontSize: 10 },
 headStyles: { fillColor: [41, 128, 185] },
 margin: { horizontal: 14 },
 });
-// 7) Save the PDF
+// Calculate the total aggregated cost
+const total = sortedItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+// 7) Add a total line below the table
+const finalY = doc.lastAutoTable.finalY || startY;
+doc.setFontSize(12);
+// Optionally set font to bold for the total line
+doc.setFont(undefined, 'bold');
+doc.text(`Total: $${total.toFixed(2)}`, 14, finalY + 10);
+// 8) Save the PDF
 doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierLabel}` : ''}.pdf`);
 }
 
@@ -427,6 +461,20 @@ const firstThursday = new Date(target.getFullYear(), 0, 4);
 const diff = target - firstThursday;
 const weekNumber = 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
 return `${weekNumber < 10 ? '0' + weekNumber : weekNumber}-${target.getFullYear()}`;
+}
+
+
+
+# ** File: src/utils/pricing.js **
+// src/utils/pricing.js
+/**
+* Given a base price and a margin percentage, return the final price.
+* @param {number} basePrice - The original price.
+* @param {number} margin - The margin percentage (e.g., 10 for 10%).
+* @returns {number} The final price.
+*/
+export function applyMargin(basePrice, margin) {
+return basePrice * (1 + margin / 100);
 }
 
 
@@ -848,13 +896,13 @@ canvasProps={{ width: 400, height: 200, className: 'sigCanvas' }}
 />
 <Box sx={{ mt: 2, display: 'flex', gap: 2 }}>
 <Button variant="outlined" onClick={onClear}>
-Clear
+Effacer
 </Button>
 <Button variant="contained" onClick={onSave}>
-Save Signature
+Enregistrer la signature
 </Button>
 <Button variant="text" onClick={onCancel}>
-Cancel
+Annuler
 </Button>
 </Box>
 </Box>
@@ -870,16 +918,12 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { firestore } from '../firebase';
 import { Link as RouterLink } from 'react-router-dom';
-import {
-Container,
-Typography,
-Link,
-Paper,
-Box,
-Chip
-} from '@mui/material';
+import { usePricing } from '../contexts/PricingContext';
+import { formatPrice } from '../utils/formatPrice';
+import { Container, Typography, Link, Paper, Box, Chip } from '@mui/material';
 function OrderHistory({ user }) {
 const [orders, setOrders] = useState([]);
+const { getFinalPrice } = usePricing();
 useEffect(() => {
 const ordersRef = collection(firestore, 'orders');
 const q = query(
@@ -893,7 +937,6 @@ setOrders(ordersData);
 });
 return () => unsubscribe();
 }, [user.uid]);
-// Helper: Choose chip color based on order status
 const getStatusColor = (status) => {
 if (status === 'delivered') return 'success';
 if (status === 'being delivered') return 'warning';
@@ -902,58 +945,51 @@ return 'default';
 return (
 <Container sx={{ py: 4 }}>
 <Typography variant="h4" gutterBottom>
-Order History
+Historique des commandes
 </Typography>
 <Link component={RouterLink} to="/">
-Back to Products
+Retour aux produits
 </Link>
 {orders.length === 0 ? (
-<Typography sx={{ mt: 2 }}>No orders found.</Typography>
+<Typography sx={{ mt: 2 }}>Aucune commande trouvée.</Typography>
 ) : (
 orders.map(order => {
-// 1) Calculate total cost for each order
-const totalCost = (order.items || []).reduce(
-(acc, item) => acc + (item.price * item.quantity),
-0
-);
+// Compute total cost using margin-adjusted prices for each item
+const totalCost = (order.items || []).reduce((acc, item) => {
+const finalPrice = getFinalPrice(item.price);
+return acc + finalPrice * item.quantity;
+}, 0);
 return (
 <Paper key={order.id} sx={{ mb: 2, p: 2 }}>
 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-Order ID: {order.id}
+ID de commande: {order.id}
 </Typography>
 <Typography variant="body2">
 <strong>Date:</strong>{' '}
 {order.createdAt ? order.createdAt.toDate().toLocaleString() : 'N/A'}
 </Typography>
-{/* Status Chip */}
 {order.deliveryStatus && (
 <Box sx={{ my: 1 }}>
-<Chip
-label={order.deliveryStatus}
-color={getStatusColor(order.deliveryStatus)}
-/>
+<Chip label={order.deliveryStatus} color={getStatusColor(order.deliveryStatus)} />
 </Box>
 )}
-{/* If delivered, show delivery date */}
 {order.deliveryStatus === 'delivered' && (
 <Typography variant="body2">
-<strong>Delivery Date:</strong>{' '}
+<strong>Date de livraison:</strong>{' '}
 {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
 </Typography>
 )}
-{/* Items table */}
 <Box sx={{ mt: 1 }}>
 <Typography variant="subtitle2" sx={{ mb: 1 }}>
-Items:
+Articles:
 </Typography>
-{/* Table header */}
 <Box
 sx={{
 display: 'flex',
 borderBottom: '1px solid #ccc',
 fontWeight: 'bold',
 pb: 1,
-mb: 1
+mb: 1,
 }}
 >
 <Box sx={{ flex: 1 }}>ID</Box>
@@ -961,54 +997,37 @@ mb: 1
 <Box sx={{ width: 80, textAlign: 'right' }}>Quantity</Box>
 <Box sx={{ width: 80, textAlign: 'right' }}>Price</Box>
 </Box>
-{/* Render each item (sorted alphabetically by name) */}
 {[...(order.items || [])]
 .sort((a, b) => a.name.localeCompare(b.name))
-.map(item => (
+.map(item => {
+const finalPrice = getFinalPrice(item.price);
+return (
 <Box key={item.id} sx={{ mb: 1 }}>
 <Box
 sx={{
 display: 'flex',
 alignItems: 'center',
 py: 0.5,
-borderBottom: '1px dashed #eee'
+borderBottom: '1px dashed #eee',
 }}
 >
 <Box sx={{ flex: 1 }}>{item.id}</Box>
 <Box sx={{ flex: 2 }}>{item.name}</Box>
 <Box sx={{ width: 80, textAlign: 'right' }}>{item.quantity}</Box>
 <Box sx={{ width: 80, textAlign: 'right' }}>
-${parseFloat(item.price).toFixed(2)}
+${formatPrice(finalPrice)}
 </Box>
 </Box>
 {item.comment && (
-<Typography
-variant="body2"
-sx={{ ml: 2, color: 'grey.600', pt: 0.5 }}
->
-Comment: {item.comment}
+<Typography variant="body2" sx={{ ml: 2, color: 'grey.600', pt: 0.5 }}>
+Commentaire: {item.comment}
 </Typography>
 )}
 </Box>
-))}
+);
+})}
 </Box>
-{/* Optionally, show signature if available */}
-{order.signature && (
-<Box sx={{ mt: 1 }}>
-<Typography variant="body2"><strong>Signature:</strong></Typography>
-<Box
-component="img"
-src={order.signature}
-alt="Signature"
-sx={{ maxWidth: 200, border: '1px solid #ccc', p: 0.5, borderRadius: 1 }}
-/>
-</Box>
-)}
-{/* 2) Show total cost for this order at the bottom */}
-<Typography
-variant="body2"
-sx={{ textAlign: 'right', mt: 2, fontWeight: 'bold' }}
->
+<Typography variant="body2" sx={{ textAlign: 'right', mt: 2, fontWeight: 'bold' }}>
 Total: ${totalCost.toFixed(2)}
 </Typography>
 </Paper>
@@ -1023,18 +1042,19 @@ export default OrderHistory;
 
 
 # ** File: src/components/ProductRow.js **
-// ProductRow.js
 import React, { useState } from 'react';
 import { TableRow, TableCell, TextField, Button } from '@mui/material';
 import { formatPrice } from '../utils/formatPrice';
+import { usePricing } from '../contexts/PricingContext';
 function ProductRow({ product, addToBasket, style, columnWidths }) {
 const [quantity, setQuantity] = useState(1);
+// Get the pricing functions from context
+const { getFinalPrice } = usePricing();
 if (!product) {
-console.log('[ProductRow] No product found for this row. Possibly out of range?');
+console.log('[ProductRow] No product found for this row.');
 return null;
 }
 const handleAdd = () => {
-console.log(`[ProductRow] handleAdd: productId=${product.id}, quantity=${quantity}`);
 addToBasket(product, parseInt(quantity, 10));
 setQuantity(1);
 };
@@ -1043,7 +1063,9 @@ return (
 <TableCell sx={{ width: columnWidths.name }}>{product.name}</TableCell>
 <TableCell sx={{ width: columnWidths.category }}>{product.category}</TableCell>
 <TableCell sx={{ width: columnWidths.bio }}>{product.bio ? "Yes" : "No"}</TableCell>
-<TableCell sx={{ width: columnWidths.price }}>${formatPrice(product.price)}</TableCell>
+<TableCell sx={{ width: columnWidths.price }}>
+${formatPrice(getFinalPrice(product.price))}
+</TableCell>
 <TableCell sx={{ width: columnWidths.quantity }}>
 <TextField
 type="number"
@@ -1056,7 +1078,7 @@ sx={{ width: '60px' }}
 </TableCell>
 <TableCell sx={{ width: columnWidths.add }}>
 <Button variant="contained" onClick={handleAdd}>
-Add
+Ajouter
 </Button>
 </TableCell>
 </TableRow>
@@ -1074,13 +1096,15 @@ Box,
 Paper,
 Typography,
 Button,
-FormControlLabel,
-Checkbox,
 TextField
 } from '@mui/material';
 import { exportAggregatedPDF } from '../utils/pdfUtils';
 import { firestore } from '../firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
+import { usePricing } from '../contexts/PricingContext';
+import { formatPrice } from '../utils/formatPrice';
+import DistributeQuantityDialog from './DistributeQuantityDialog'; // If you have a Distribute dialog
+// ^ If you haven't implemented the Distribute dialog, remove that import
 // Custom hook: Batch-fetch original prices from products by IDs.
 function useOriginalPrices(productIds) {
 const [pricesMap, setPricesMap] = useState({});
@@ -1114,17 +1138,23 @@ fetchPrices();
 }, [productIds]);
 return pricesMap;
 }
-export default function AggregatedTable({
+function AggregatedTable({
 aggregatedBySupplier,
 supplierInvoiceUrl,
 handleInvoiceFileChangeAndUpload,
-toggleCollected,
+// The next function is now only used for newPrice updates
 updateChecklistField,
 checklist,
 handleOpenReplaceDialog,
 currentWeek,
+orders // If you pass the orders to handle distribution
 }) {
-// Extract unique product IDs from the aggregated orders.
+const { getFinalPrice } = usePricing();
+// State for controlling the "Distribuer" dialog
+const [distributeDialogOpen, setDistributeDialogOpen] = useState(false);
+const [currentDistributeProduct, setCurrentDistributeProduct] = useState(null);
+const [ordersForDistribution, setOrdersForDistribution] = useState([]);
+// Gather all unique product IDs
 const productIdsSet = new Set();
 Object.keys(aggregatedBySupplier).forEach(supplier => {
 const itemsObj = aggregatedBySupplier[supplier];
@@ -1137,187 +1167,172 @@ const originalPrices = useOriginalPrices(productIds);
 if (Object.keys(aggregatedBySupplier).length === 0) {
 return <Typography>No aggregated products.</Typography>;
 }
+// Handler for opening the "Distribuer" dialog
+const handleOpenDistributeDialog = (item) => {
+// Find all orders that contain this product
+const relevantOrders = orders.filter((ord) =>
+ord.items?.some((it) => it.id === item.id)
+);
+setCurrentDistributeProduct(item);
+setOrdersForDistribution(relevantOrders);
+setDistributeDialogOpen(true);
+};
 return (
 <>
 {Object.keys(aggregatedBySupplier)
 .sort()
 .map((supplier) => {
 const itemsObj = aggregatedBySupplier[supplier];
-// Each aggregated item is assumed to have an optional "comments" array.
 const itemsArray = Object.values(itemsObj).sort((a, b) =>
 a.name.localeCompare(b.name)
 );
-const totalCost = itemsArray.reduce(
-(acc, item) => acc + item.quantity * item.price,
-0
-);
+// Compute total cost using margin-adjusted prices
+const totalCost = itemsArray.reduce((acc, item) => {
+const basePrice =
+originalPrices[item.id] !== undefined
+? originalPrices[item.id]
+: item.price;
+const finalPrice = getFinalPrice(basePrice);
+return acc + finalPrice * item.quantity;
+}, 0);
 const handleExportPDF = () => {
 exportAggregatedPDF(itemsArray, currentWeek, supplier);
 };
 return (
 <Paper key={supplier} sx={{ mb: 2, p: 2 }}>
 <Typography variant="h6" gutterBottom>
-Supplier: {supplier}
+Fournisseur: {supplier}
 </Typography>
 <Button variant="contained" onClick={handleExportPDF} sx={{ mb: 2 }}>
-Export PDF
+Exporter en PDF
 </Button>
+{/* Optional: If you want an "Upload Invoice" button or input, you can place it here */}
+{/* Table Header Row (no "Collected" column anymore) */}
 <Box
 sx={{
 display: 'grid',
 gridTemplateColumns: {
 xs: '1fr 1fr',
-sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr',
+sm: '1fr 2fr 0.7fr 1fr 1fr 1fr'
 },
 gap: 1,
 mb: 1,
 fontWeight: 'bold',
 borderBottom: '1px solid #ccc',
 pb: 1,
-width: '100%',
+width: '100%'
 }}
 >
 <Typography>ID</Typography>
-<Typography>Name</Typography>
-<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>
-Qty
+<Typography>Nom</Typography>
+{/* "Qtée" column */}
+<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+Qtée
 </Typography>
-<Typography sx={{ display: { xs: 'none', sm: 'block' } }}>
-Coll.
+{/* New Price label */}
+<Typography sx={{ textAlign: 'center', display: { xs: 'none', sm: 'block' } }}>
+Nouv. Prix
 </Typography>
-<Typography
-sx={{
-textAlign: 'center',
-display: { xs: 'none', sm: 'block' },
-}}
->
-Collected
-</Typography>
-<Typography
-sx={{
-textAlign: 'center',
-display: { xs: 'none', sm: 'block' },
-}}
->
-New Price
-</Typography>
-<Typography
-sx={{
-textAlign: 'right',
-display: { xs: 'none', sm: 'block' },
-}}
->
+<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
 Orig
 </Typography>
-<Typography
-sx={{
-textAlign: 'right',
-display: { xs: 'none', sm: 'block' },
-}}
->
+<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
 Action
 </Typography>
 </Box>
-{itemsArray.map((item) => (
+{itemsArray.map((item) => {
+const basePrice =
+originalPrices[item.id] !== undefined
+? originalPrices[item.id]
+: item.price;
+const finalPrice = getFinalPrice(basePrice);
+// We'll keep using checklist for newPrice
+const newPriceValue = checklist[item.id]?.newPrice ?? '';
+return (
 <React.Fragment key={item.id}>
 <Box
 sx={{
 display: 'grid',
 gridTemplateColumns: {
 xs: '1fr 1fr',
-sm: '1fr 2fr 0.7fr 0.7fr 1fr 1fr 1fr 1fr',
+sm: '1fr 2fr 0.7fr 1fr 1fr 1fr'
 },
 alignItems: 'center',
 gap: 1,
 mb: 1,
 width: '100%',
-p: 0.5,
+p: 0.5
 }}
 >
 <Typography>{item.id}</Typography>
 <Typography>{item.name}</Typography>
-<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
+{/* Quantity (just display) */}
+<Typography
+sx={{
+textAlign: 'right',
+display: { xs: 'none', sm: 'block' }
+}}
+>
 {item.quantity}
 </Typography>
-<FormControlLabel
-control={
-<Checkbox
-checked={checklist[item.id]?.collected || false}
-onChange={() => toggleCollected(item.id)}
-/>
-}
-label=""
-sx={{ mr: 0, display: { xs: 'none', sm: 'inline-flex' } }}
-/>
-<TextField
-label="Collected"
-type="number"
-size="small"
-value={
-checklist[item.id]?.collectedQuantity !== undefined &&
-checklist[item.id].collectedQuantity !== null
-? checklist[item.id].collectedQuantity
-: ''
-}
-onChange={(e) => {
-const newValue = e.target.value === '' ? null : parseInt(e.target.value, 10);
-updateChecklistField(item.id, 'collectedQuantity', newValue);
-}}
-inputProps={{
-min: 0,
-style: { textAlign: 'right' },
-inputMode: 'numeric',
-pattern: '[0-9]*',
-}}
-sx={{
-width: '100%',
-maxWidth: { xs: '90px', sm: '100%' },
-bgcolor:
-checklist[item.id]?.collectedQuantity !== item.quantity ? '#e0f2fe' : 'transparent',
-}}
-/>
+{/* New Price field */}
 <TextField
 label="New Price"
 type="number"
 size="small"
-value={
-checklist[item.id]?.newPrice !== undefined &&
-checklist[item.id].newPrice !== null
-? checklist[item.id].newPrice
-: ''
-}
+value={newPriceValue}
 onChange={(e) => {
-const newValue = e.target.value === '' ? null : parseFloat(e.target.value);
-updateChecklistField(item.id, 'newPrice', newValue);
+const newVal =
+e.target.value === '' ? null : parseFloat(e.target.value);
+updateChecklistField(item.id, 'newPrice', newVal);
 }}
 inputProps={{
 min: 0,
 style: { textAlign: 'right' },
 inputMode: 'decimal',
-pattern: '[0-9]*',
+pattern: '[0-9]*'
 }}
 sx={{
 width: '100%',
 maxWidth: { xs: '90px', sm: '100%' },
+// Optional highlight if changed
 bgcolor:
-checklist[item.id]?.newPrice &&
-parseFloat(checklist[item.id].newPrice) !== parseFloat(item.price)
+newPriceValue &&
+parseFloat(newPriceValue) !== parseFloat(item.price)
 ? '#e0f2fe'
-: 'transparent',
+: 'transparent'
 }}
 />
-<Typography sx={{ textAlign: 'right', display: { xs: 'none', sm: 'block' } }}>
-${parseFloat(originalPrices[item.id] !== undefined ? originalPrices[item.id] : item.price).toFixed(2)}
+{/* Display final price with margin */}
+<Typography
+sx={{
+textAlign: 'right',
+display: { xs: 'none', sm: 'block' }
+}}
+>
+${formatPrice(finalPrice)}
 </Typography>
+{/* Action buttons: Remplacer & Distribuer */}
+<Box sx={{ display: 'flex', gap: 1 }}>
 <Button
 variant="outlined"
 size="small"
 onClick={() => handleOpenReplaceDialog(item.id)}
 sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
 >
-Replace
+Remplacer
+</Button>
+<Button
+variant="outlined"
+size="small"
+onClick={() => handleOpenDistributeDialog(item)}
+sx={{ display: { xs: 'none', sm: 'inline-flex' } }}
+>
+Distribuer
 </Button>
 </Box>
+</Box>
+{/* Comments (if any) */}
 {item.comments &&
 item.comments.length > 0 &&
 item.comments.map((entry, index) => (
@@ -1330,16 +1345,28 @@ Commentaire de {entry.company} : {entry.comment}
 </Typography>
 ))}
 </React.Fragment>
-))}
+);
+})}
+{/* Total line */}
 <Box sx={{ mt: 2, textAlign: 'right', fontWeight: 'bold' }}>
 Total: ${totalCost.toFixed(2)}
 </Box>
 </Paper>
 );
 })}
+{/* The "Distribuer" dialog, if implemented */}
+{distributeDialogOpen && currentDistributeProduct && (
+<DistributeQuantityDialog
+open={distributeDialogOpen}
+product={currentDistributeProduct}
+orders={ordersForDistribution}
+onClose={() => setDistributeDialogOpen(false)}
+/>
+)}
 </>
 );
 }
+export default AggregatedTable;
 
 
 
@@ -1377,17 +1404,17 @@ handleCodeInApp: true,
 try {
 await sendSignInLinkToEmail(auth, email, actionCodeSettings);
 window.localStorage.setItem('emailForSignIn', email);
-setMessage('Login link sent to your email!');
+setMessage('Lien de connexion envoyé à votre adresse courriel!');
 } catch (error) {
 console.error(error);
-setMessage('Error sending email link');
+setMessage("Erreur lors de l'envoi du lien de connexion");
 }
 };
 return (
 <Container maxWidth="sm">
 <Box sx={{ mt: 8, p: 4, boxShadow: 3, borderRadius: 2 }}>
 <Typography variant="h4" component="h1" gutterBottom>
-Login
+Connexion
 </Typography>
 <form onSubmit={handleSubmit}>
 <TextField
@@ -1401,7 +1428,7 @@ onChange={e => setEmail(e.target.value)}
 required
 />
 <Button variant="contained" color="primary" type="submit" fullWidth>
-Send Login Link
+Envoyer le lien de connexion
 </Button>
 </form>
 {message && <Alert severity="info" sx={{ mt: 2 }}>{message}</Alert>}
@@ -1426,18 +1453,18 @@ export default NoTag;
 import React from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { List, ListItem, ListItemText, Box, Typography, Button } from '@mui/material';
-// Import your existing VirtualizedProductsTable:
+import { List, ListItem, Typography, Box, Button } from '@mui/material';
 import VirtualizedProductsTable from './VirtualizedProductsTable';
-/**
-* A simple card-like list for mobile screens.
-* You can customize how many fields to display,
-* e.g., category, supplier, etc.
-*/
+import { usePricing } from '../contexts/PricingContext';    // <-- NEW
+import { formatPrice } from '../utils/formatPrice';          // <-- NEW
 function MobileProductsList({ products, addToBasket }) {
+const { getFinalPrice } = usePricing();
 return (
 <List>
-{products.map((product) => (
+{products.map((product) => {
+const finalPrice = getFinalPrice(product.price);
+const displayPrice = formatPrice(finalPrice);
+return (
 <ListItem
 key={product.id}
 sx={{
@@ -1450,42 +1477,31 @@ borderBottom: '1px solid #eee'
 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
 {product.name}
 </Typography>
-{/* Example: Show Price and maybe Category */}
 <Typography variant="body2" sx={{ mt: 0.5 }}>
-Price: ${product.price?.toFixed(2)}
+Prix: ${displayPrice}
 </Typography>
 {product.category && (
 <Typography variant="body2" sx={{ color: 'grey.600' }}>
-Category: {product.category}
+Catégorie: {product.category}
 </Typography>
 )}
-{/* "Add to Basket" button */}
 <Box sx={{ mt: 1 }}>
-<Button
-variant="contained"
-onClick={() => addToBasket(product, 1)}
->
+<Button variant="contained" onClick={() => addToBasket(product, 1)}>
 Ajouter
 </Button>
 </Box>
 </ListItem>
-))}
+);
+})}
 </List>
 );
 }
-/**
-* A wrapper that detects if we're on a small screen:
-* - If yes, render the mobile list
-* - If no, render the VirtualizedProductsTable
-*/
 export default function ResponsiveProductsView({ products, addToBasket }) {
 const theme = useTheme();
 const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 if (isMobile) {
-// Card/list layout for mobile
 return <MobileProductsList products={products} addToBasket={addToBasket} />;
 } else {
-// Original table for larger screens
 return <VirtualizedProductsTable products={products} addToBasket={addToBasket} />;
 }
 }
@@ -1598,24 +1614,24 @@ doc.save(`delivery_bill_order_${order.id}.pdf`);
 return (
 <Paper sx={{ mb: 2, p: 2, backgroundColor: '#f7f7f7' }}>
 <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-Order ID: {order.id}
+ID de commande: {order.id}
 </Typography>
 {/* Display company info */}
 {companyName && (
 <Typography variant="body2" sx={{ mb: 1 }}>
-Company: {companyName}
+Compagnie: {companyName}
 </Typography>
 )}
 <Typography variant="body2" sx={{ mb: 1 }}>
-Email: {order.email}
+Courriel: {order.email}
 </Typography>
 {address && (
 <Typography variant="body2" sx={{ mb: 1 }}>
-Address: {address}
+Adresse: {address}
 </Typography>
 )}
 <Typography variant="body2">
-Delivered on:{' '}
+Livré le:{' '}
 {order.deliveredAt ? order.deliveredAt.toDate().toLocaleString() : 'N/A'}
 </Typography>
 {/* Web Interface: Items in columns */}
@@ -1624,9 +1640,9 @@ Delivered on:{' '}
 {/* Header Row */}
 <Box sx={{ display: 'flex', borderBottom: '1px solid #ccc', pb: 1, mb: 1 }}>
 <Box sx={{ flex: 1, fontWeight: 'bold' }}>ID</Box>
-<Box sx={{ flex: 3, fontWeight: 'bold' }}>Name</Box>
-<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Quantity</Box>
-<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Price</Box>
+<Box sx={{ flex: 3, fontWeight: 'bold' }}>Nom</Box>
+<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Quantitée</Box>
+<Box sx={{ flex: 1, fontWeight: 'bold', textAlign: 'right' }}>Prix</Box>
 </Box>
 {/* Data Rows */}
 {order.items.map(item => (
@@ -1661,7 +1677,7 @@ sx={{ maxWidth: 200, border: '1px solid #ccc', p: 0.5, borderRadius: 1 }}
 </Box>
 )}
 <Button variant="contained" onClick={printBill} sx={{ mt: 2 }}>
-Print Delivery Bill
+Imprimer le bon de livraison
 </Button>
 </Paper>
 );
@@ -2169,6 +2185,7 @@ toggleCollected={toggleCollected}
 updateChecklistField={updateChecklistField}
 handleInvoiceFileChangeAndUpload={handleInvoiceFileChangeAndUpload}
 handleOpenReplaceDialog={handleOpenReplaceDialog}
+orders={orders} // NEW: pass orders for filtering in distribution
 />
 </Box>
 <Typography variant="h5" sx={{ mt: 4, mb: 2 }}>
@@ -2259,6 +2276,129 @@ Confirmer
 
 
 
+# ** File: src/components/DistributeQuantityDialog.js **
+// src/components/DistributeQuantityDialog.js
+import React, { useState, useEffect } from 'react';
+import {
+Dialog,
+DialogTitle,
+DialogContent,
+DialogActions,
+Button,
+Box,
+TextField,
+Typography,
+} from '@mui/material';
+import { updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { firestore } from '../firebase';
+const DistributeQuantityDialog = ({ open, product, orders, onClose }) => {
+// Create a state to hold updated quantities for each order (keyed by order id)
+const [quantities, setQuantities] = useState({});
+// When the dialog opens, initialize the quantities from the orders' items.
+useEffect(() => {
+if (open && product && orders) {
+const initial = {};
+orders.forEach((order) => {
+const item = order.items.find((it) => it.id === product.id);
+if (item) {
+initial[order.id] = item.quantity;
+}
+});
+setQuantities(initial);
+}
+}, [open, product, orders]);
+// Handle quantity change for an order
+const handleQuantityChange = (orderId, newQty) => {
+setQuantities((prev) => ({
+...prev,
+[orderId]: newQty,
+}));
+};
+// On confirm, update all orders with the new quantity for the product
+const handleConfirm = async () => {
+const batchUpdates = [];
+for (const order of orders) {
+const itemIndex = order.items.findIndex((it) => it.id === product.id);
+if (itemIndex >= 0) {
+const currentQty = order.items[itemIndex].quantity;
+const newQty = parseInt(quantities[order.id], 10);
+if (newQty !== currentQty) {
+const updatedItems = [...order.items];
+updatedItems[itemIndex] = { ...updatedItems[itemIndex], quantity: newQty };
+batchUpdates.push(
+updateDoc(doc(firestore, 'orders', order.id), {
+items: updatedItems,
+updatedAt: serverTimestamp(),
+})
+);
+}
+}
+}
+try {
+await Promise.all(batchUpdates);
+onClose();
+} catch (error) {
+console.error('Error updating distributed quantities:', error);
+}
+};
+return (
+<Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+<DialogTitle>Distribuer pour {product?.name}</DialogTitle>
+<DialogContent dividers>
+{orders && orders.length > 0 ? (
+orders.map((order) => {
+const item = order.items.find((it) => it.id === product.id);
+if (!item) return null;
+return (
+<Box
+key={order.id}
+sx={{
+display: 'grid',
+gridTemplateColumns: '1fr 80px', // left = auto, right = fixed
+alignItems: 'center',
+gap: 2,
+mb: 2,
+}}
+>
+{/* Left side: 2 lines for order ID and email */}
+<Box>
+<Typography variant="body1">
+Order {order.id}
+</Typography>
+<Typography variant="body2" color="text.secondary">
+{order.email || 'N/A'}
+</Typography>
+</Box>
+{/* Right side: the quantity field */}
+<TextField
+type="number"
+size="small"
+value={quantities[order.id] ?? item.quantity}
+onChange={(e) => handleQuantityChange(order.id, e.target.value)}
+inputProps={{ min: 0 }}
+/>
+</Box>
+);
+})
+) : (
+<Typography>Aucune commande trouvée pour ce produit.</Typography>
+)}
+</DialogContent>
+<DialogActions>
+<Button onClick={onClose} color="secondary">
+Annuler
+</Button>
+<Button onClick={handleConfirm} variant="contained" color="primary">
+Confirmer
+</Button>
+</DialogActions>
+</Dialog>
+);
+};
+export default DistributeQuantityDialog;
+
+
+
 # ** File: src/components/CustomTbody.js **
 // CustomTbody.js
 import React from 'react';
@@ -2274,8 +2414,9 @@ export default CustomTbody;
 import React from 'react';
 import { FixedSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
-// Définitions de colonnes de base
-// Ajout d'une nouvelle colonne pour "Fournisseur" avec une largeur de base de 120
+import { usePricing } from '../contexts/PricingContext';    // <-- NEW
+import { formatPrice } from '../utils/formatPrice';          // <-- NEW
+// Define your columns
 const columns = [
 { label: 'Bio', baseWidth: 40 },
 { label: 'Produit', baseWidth: 300 },
@@ -2287,16 +2428,19 @@ const columns = [
 ];
 const ROW_HEIGHT = 50;
 /**
-* Rendu d'une ligne de données (sans en-tête).
+* RowRenderer: We pass getFinalPrice via itemData, so we can apply margin.
 */
-const RowRendererWithoutHeader = ({ index, style, data }) => {
-const { products, addToBasket, scaledColumns } = data;
+function RowRendererWithoutHeader({ index, style, data }) {
+const { products, addToBasket, scaledColumns, getFinalPrice } = data;
 const product = products[index];
 if (!product) return null;
-const formattedPrice = parseFloat(product.price).toFixed(2);
+// 1) Apply margin
+const finalPrice = getFinalPrice(product.price);
+// 2) Format it
+const displayPrice = formatPrice(finalPrice);
 return (
 <div style={{ ...style, display: 'flex', borderBottom: '1px solid #eee' }}>
-{/* Colonne 1 : Bio */}
+{/* Column 1: Bio */}
 <div
 style={{
 width: scaledColumns[0].scaledWidth,
@@ -2306,7 +2450,7 @@ boxSizing: 'border-box',
 >
 {product.bio ? '🌿' : ''}
 </div>
-{/* Colonne 2 : Nom du produit */}
+{/* Column 2: Product Name */}
 <div
 style={{
 width: scaledColumns[1].scaledWidth,
@@ -2316,7 +2460,7 @@ boxSizing: 'border-box',
 >
 {product.name}
 </div>
-{/* Colonne 3 : Catégorie */}
+{/* Column 3: Category */}
 <div
 style={{
 width: scaledColumns[2].scaledWidth,
@@ -2326,7 +2470,7 @@ boxSizing: 'border-box',
 >
 {product.category}
 </div>
-{/* Colonne 4 : Fournisseur */}
+{/* Column 4: Supplier */}
 <div
 style={{
 width: scaledColumns[3].scaledWidth,
@@ -2336,7 +2480,7 @@ boxSizing: 'border-box',
 >
 {product.supplier || ''}
 </div>
-{/* Colonne 5 : Prix (aligné à droite) */}
+{/* Column 5: Price (with margin) */}
 <div
 style={{
 width: scaledColumns[4].scaledWidth,
@@ -2345,9 +2489,9 @@ boxSizing: 'border-box',
 textAlign: 'right',
 }}
 >
-${formattedPrice}
+${displayPrice}
 </div>
-{/* Colonne 6 : Quantité (fixée à "1" dans cet exemple minimal) */}
+{/* Column 6: Hard-coded "1" for quantity in your example */}
 <div
 style={{
 width: scaledColumns[5].scaledWidth,
@@ -2357,7 +2501,7 @@ boxSizing: 'border-box',
 >
 1
 </div>
-{/* Colonne 7 : Bouton Ajouter */}
+{/* Column 7: Add button */}
 <div
 style={{
 width: scaledColumns[6].scaledWidth,
@@ -2369,9 +2513,11 @@ boxSizing: 'border-box',
 </div>
 </div>
 );
-};
-function VirtualizedProductsTable({ products, addToBasket }) {
-// Largeur totale de toutes les colonnes combinées, avant le redimensionnement
+}
+export default function VirtualizedProductsTable({ products, addToBasket }) {
+// Pull getFinalPrice from context
+const { getFinalPrice } = usePricing();
+// The rest is your existing code for layout
 const totalBaseWidth = columns.reduce((sum, col) => sum + col.baseWidth, 0);
 return (
 <div style={{ height: '80vh', width: '100%' }}>
@@ -2382,12 +2528,11 @@ const scaledColumns = columns.map((col) => ({
 label: col.label,
 scaledWidth: col.baseWidth * ratio,
 }));
-// Réserver de l'espace pour la ligne d'en-tête
 const headerHeight = ROW_HEIGHT;
 const listHeight = height - headerHeight;
 return (
 <>
-{/* En-tête fixe */}
+{/* Header row */}
 <div
 style={{
 width: `${width}px`,
@@ -2411,13 +2556,14 @@ borderRight: '1px solid #ddd',
 </div>
 ))}
 </div>
-{/* Liste déroulante des lignes */}
+{/* Scrolling list */}
 <List
 height={listHeight}
 width={width}
 itemCount={products.length}
 itemSize={ROW_HEIGHT}
-itemData={{ products, addToBasket, scaledColumns }}
+// We pass getFinalPrice in itemData so the row renderer can use it
+itemData={{ products, addToBasket, scaledColumns, getFinalPrice }}
 >
 {RowRendererWithoutHeader}
 </List>
@@ -2428,7 +2574,6 @@ itemData={{ products, addToBasket, scaledColumns }}
 </div>
 );
 }
-export default VirtualizedProductsTable;
 
 
 
@@ -2622,11 +2767,11 @@ onSave(editedProduct);
 };
 return (
 <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-<DialogTitle>Edit Product</DialogTitle>
+<DialogTitle>Modifier le produit</DialogTitle>
 <DialogContent>
 <Box component="form" sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
 <TextField
-label="Name"
+label="Nom"
 variant="outlined"
 fullWidth
 value={editedProduct.name || ''}
@@ -2640,7 +2785,7 @@ value={editedProduct.code || ''}
 onChange={(e) => handleChange('code', e.target.value)}
 />
 <TextField
-label="Price"
+label="Prix"
 variant="outlined"
 fullWidth
 type="number"
@@ -2648,14 +2793,14 @@ value={editedProduct.price || ''}
 onChange={(e) => handleChange('price', parseFloat(e.target.value))}
 />
 <TextField
-label="Category"
+label="Catégorie"
 variant="outlined"
 fullWidth
 value={editedProduct.category || ''}
 onChange={(e) => handleChange('category', e.target.value)}
 />
 <TextField
-label="Supplier"
+label="Fournisseur"
 variant="outlined"
 fullWidth
 value={editedProduct.supplier || ''}
@@ -2668,17 +2813,17 @@ checked={editedProduct.available || false}
 onChange={(e) => handleCheckboxChange('available', e)}
 />
 }
-label="Available"
+label="Disponible"
 />
 {/* Add any additional product fields as needed */}
 </Box>
 </DialogContent>
 <DialogActions>
 <Button onClick={onClose} color="secondary">
-Cancel
+Annuler
 </Button>
 <Button onClick={handleSave} variant="contained" color="primary">
-Save
+Sauver
 </Button>
 </DialogActions>
 </Dialog>
@@ -2694,11 +2839,12 @@ import { Box, Button, Typography, IconButton, TextField, Collapse } from '@mui/m
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import { usePricing } from '../contexts/PricingContext';
+import { formatPrice } from '../utils/formatPrice';
 function Basket({ basket, updateBasketItem, updateBasketItemComment, removeBasketItem, saveOrder, isOrderAllowed }) {
 const [expanded, setExpanded] = useState(false);
-// Local state to track which item comments are open
 const [commentOpen, setCommentOpen] = useState({});
-// When the basket changes, ensure that items with an existing comment have their comment field open
+const { getFinalPrice } = usePricing();
 useEffect(() => {
 setCommentOpen(prev => {
 const newState = { ...prev };
@@ -2714,8 +2860,11 @@ const toggleExpand = () => setExpanded(!expanded);
 const toggleComment = (id) => {
 setCommentOpen(prev => ({ ...prev, [id]: !prev[id] }));
 };
-// Calculate the total as a number and also as a formatted string
-const totalCostValue = basket.reduce((acc, item) => acc + item.price * item.quantity, 0);
+// Compute total cost using the final (margin-adjusted) price
+const totalCostValue = basket.reduce((acc, item) => {
+const finalPrice = getFinalPrice(item.price);
+return acc + finalPrice * item.quantity;
+}, 0);
 const totalCost = totalCostValue.toFixed(2);
 return (
 <Box
@@ -2748,7 +2897,9 @@ boxShadow: 3,
 {[...basket]
 .sort((a, b) => a.name.localeCompare(b.name))
 .map((item) => {
-const lineTotal = (item.price * item.quantity).toFixed(2);
+const finalPrice = getFinalPrice(item.price);
+const formattedPrice = formatPrice(finalPrice);
+const lineTotal = (finalPrice * item.quantity).toFixed(2);
 return (
 <Box key={item.id} sx={{ display: 'flex', flexDirection: 'column', mb: 1, gap: 1 }}>
 <Box
@@ -2760,7 +2911,7 @@ flexWrap: 'wrap',
 }}
 >
 <Typography sx={{ flex: 2 }}>
-{item.name} - ${parseFloat(item.price).toFixed(2)}
+{item.name} - ${formattedPrice}
 </Typography>
 <Typography sx={{ width: '100px', textAlign: 'right' }}>
 ${lineTotal}
@@ -2795,7 +2946,6 @@ onChange={(e) => updateBasketItemComment(item.id, e.target.value)}
 </>
 )}
 </Box>
-{/* New message if total cost is under $400 */}
 {basket.length > 0 && totalCostValue < 400 && (
 <Typography
 variant="caption"
@@ -3128,11 +3278,11 @@ color="secondary"
 onClick={handleLogout}
 sx={{ mt: 1 }}
 >
-Log Out
+Déconnexion
 </Button>
 {isDelivery && (
 <Button variant="outlined" component={Link} to="/delivery" sx={{ mt: 1, ml: 1 }}>
-Delivery Dashboard
+Tableau de bord des livraisons
 </Button>
 )}
 {userAddress && (
@@ -3244,12 +3394,12 @@ setAddDialogOpen(false);
 return (
 <Container sx={{ pt: 4, pb: 4 }}>
 <Typography variant="h4" gutterBottom>
-Products Manager
+Gestionnaire de produits
 </Typography>
 {/* Add New Product button */}
 <Box sx={{ mb: 2 }}>
 <Button variant="contained" color="primary" onClick={() => setAddDialogOpen(true)}>
-Add New Product
+Ajouter un nouveau produit
 </Button>
 </Box>
 <FilterBar
@@ -3266,7 +3416,7 @@ distinctSuppliers={distinctSuppliers}
 />
 <Box sx={{ mt: 2 }}>
 {filteredProducts.length === 0 ? (
-<Typography>No products found.</Typography>
+<Typography>Aucun produit trouvé.</Typography>
 ) : (
 <List>
 {filteredProducts.map(product => (
@@ -3274,7 +3424,7 @@ distinctSuppliers={distinctSuppliers}
 <ListItem button onClick={() => handleProductClick(product)}>
 <ListItemText
 primary={product.name}
-secondary={`Code: ${product.code || '-'} | Price: $${parseFloat(product.price).toFixed(2)} | Available: ${product.available ? 'Yes' : 'No'}`}
+secondary={`Code: ${product.code || '-'} | Prix: $${parseFloat(product.price).toFixed(2)} | Disponible: ${product.available ? 'Oui' : 'Non'}`}
 />
 </ListItem>
 <Divider />
@@ -3392,5 +3542,33 @@ supplierInvoiceUrl,
 reloadInvoices,
 currentWeek,
 };
+}
+
+
+
+# ** File: src/hooks/useMargin.js **
+import { useState, useEffect } from 'react';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { firestore } from '../firebase';
+/**
+* Custom hook to fetch the margin percentage from Firestore.
+* It listens to the document at settings/sales and returns the margin,
+* defaulting to 0 if not set.
+*/
+export function useMargin() {
+const [margin, setMargin] = useState(0);
+useEffect(() => {
+const marginDocRef = doc(firestore, 'settings', 'sales');
+const unsubscribe = onSnapshot(marginDocRef, (snapshot) => {
+if (snapshot.exists()) {
+const data = snapshot.data();
+setMargin(data.margin ?? 0);
+} else {
+setMargin(0);
+}
+});
+return () => unsubscribe();
+}, []);
+return margin;
 }
 

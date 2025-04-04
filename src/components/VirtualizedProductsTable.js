@@ -2,9 +2,10 @@
 import React from 'react';
 import { FixedSizeList as List } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
+import { usePricing } from '../contexts/PricingContext';    // <-- NEW
+import { formatPrice } from '../utils/formatPrice';          // <-- NEW
 
-// Définitions de colonnes de base
-// Ajout d'une nouvelle colonne pour "Fournisseur" avec une largeur de base de 120
+// Define your columns
 const columns = [
   { label: 'Bio', baseWidth: 40 },
   { label: 'Produit', baseWidth: 300 },
@@ -18,16 +19,21 @@ const columns = [
 const ROW_HEIGHT = 50;
 
 /**
- * Rendu d'une ligne de données (sans en-tête).
+ * RowRenderer: We pass getFinalPrice via itemData, so we can apply margin.
  */
-const RowRendererWithoutHeader = ({ index, style, data }) => {
-  const { products, addToBasket, scaledColumns } = data;
+function RowRendererWithoutHeader({ index, style, data }) {
+  const { products, addToBasket, scaledColumns, getFinalPrice } = data;
   const product = products[index];
   if (!product) return null;
-  const formattedPrice = parseFloat(product.price).toFixed(2);
+
+  // 1) Apply margin
+  const finalPrice = getFinalPrice(product.price);
+  // 2) Format it
+  const displayPrice = formatPrice(finalPrice);
+
   return (
     <div style={{ ...style, display: 'flex', borderBottom: '1px solid #eee' }}>
-      {/* Colonne 1 : Bio */}
+      {/* Column 1: Bio */}
       <div
         style={{
           width: scaledColumns[0].scaledWidth,
@@ -37,7 +43,8 @@ const RowRendererWithoutHeader = ({ index, style, data }) => {
       >
         {product.bio ? '🌿' : ''}
       </div>
-      {/* Colonne 2 : Nom du produit */}
+
+      {/* Column 2: Product Name */}
       <div
         style={{
           width: scaledColumns[1].scaledWidth,
@@ -47,7 +54,8 @@ const RowRendererWithoutHeader = ({ index, style, data }) => {
       >
         {product.name}
       </div>
-      {/* Colonne 3 : Catégorie */}
+
+      {/* Column 3: Category */}
       <div
         style={{
           width: scaledColumns[2].scaledWidth,
@@ -57,7 +65,8 @@ const RowRendererWithoutHeader = ({ index, style, data }) => {
       >
         {product.category}
       </div>
-      {/* Colonne 4 : Fournisseur */}
+
+      {/* Column 4: Supplier */}
       <div
         style={{
           width: scaledColumns[3].scaledWidth,
@@ -67,7 +76,8 @@ const RowRendererWithoutHeader = ({ index, style, data }) => {
       >
         {product.supplier || ''}
       </div>
-      {/* Colonne 5 : Prix (aligné à droite) */}
+
+      {/* Column 5: Price (with margin) */}
       <div
         style={{
           width: scaledColumns[4].scaledWidth,
@@ -76,9 +86,10 @@ const RowRendererWithoutHeader = ({ index, style, data }) => {
           textAlign: 'right',
         }}
       >
-        ${formattedPrice}
+        ${displayPrice}
       </div>
-      {/* Colonne 6 : Quantité (fixée à "1" dans cet exemple minimal) */}
+
+      {/* Column 6: Hard-coded "1" for quantity in your example */}
       <div
         style={{
           width: scaledColumns[5].scaledWidth,
@@ -88,7 +99,8 @@ const RowRendererWithoutHeader = ({ index, style, data }) => {
       >
         1
       </div>
-      {/* Colonne 7 : Bouton Ajouter */}
+
+      {/* Column 7: Add button */}
       <div
         style={{
           width: scaledColumns[6].scaledWidth,
@@ -100,11 +112,15 @@ const RowRendererWithoutHeader = ({ index, style, data }) => {
       </div>
     </div>
   );
-};
+}
 
-function VirtualizedProductsTable({ products, addToBasket }) {
-  // Largeur totale de toutes les colonnes combinées, avant le redimensionnement
+export default function VirtualizedProductsTable({ products, addToBasket }) {
+  // Pull getFinalPrice from context
+  const { getFinalPrice } = usePricing();
+
+  // The rest is your existing code for layout
   const totalBaseWidth = columns.reduce((sum, col) => sum + col.baseWidth, 0);
+
   return (
     <div style={{ height: '80vh', width: '100%' }}>
       <AutoSizer>
@@ -114,12 +130,12 @@ function VirtualizedProductsTable({ products, addToBasket }) {
             label: col.label,
             scaledWidth: col.baseWidth * ratio,
           }));
-          // Réserver de l'espace pour la ligne d'en-tête
           const headerHeight = ROW_HEIGHT;
           const listHeight = height - headerHeight;
+
           return (
             <>
-              {/* En-tête fixe */}
+              {/* Header row */}
               <div
                 style={{
                   width: `${width}px`,
@@ -143,13 +159,15 @@ function VirtualizedProductsTable({ products, addToBasket }) {
                   </div>
                 ))}
               </div>
-              {/* Liste déroulante des lignes */}
+
+              {/* Scrolling list */}
               <List
                 height={listHeight}
                 width={width}
                 itemCount={products.length}
                 itemSize={ROW_HEIGHT}
-                itemData={{ products, addToBasket, scaledColumns }}
+                // We pass getFinalPrice in itemData so the row renderer can use it
+                itemData={{ products, addToBasket, scaledColumns, getFinalPrice }}
               >
                 {RowRendererWithoutHeader}
               </List>
@@ -160,5 +178,3 @@ function VirtualizedProductsTable({ products, addToBasket }) {
     </div>
   );
 }
-
-export default VirtualizedProductsTable;

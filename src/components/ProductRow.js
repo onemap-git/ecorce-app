@@ -1,19 +1,19 @@
-// ProductRow.js
 import React, { useState } from 'react';
 import { TableRow, TableCell, TextField, Button } from '@mui/material';
 import { formatPrice } from '../utils/formatPrice';
-
+import { usePricing } from '../contexts/PricingContext';
 
 function ProductRow({ product, addToBasket, style, columnWidths }) {
   const [quantity, setQuantity] = useState(1);
+  // Get the pricing functions from context
+  const { getFinalPrice } = usePricing();
 
   if (!product) {
-    console.log('[ProductRow] No product found for this row. Possibly out of range?');
+    console.log('[ProductRow] No product found for this row.');
     return null;
   }
 
   const handleAdd = () => {
-    console.log(`[ProductRow] handleAdd: productId=${product.id}, quantity=${quantity}`);
     addToBasket(product, parseInt(quantity, 10));
     setQuantity(1);
   };
@@ -23,7 +23,9 @@ function ProductRow({ product, addToBasket, style, columnWidths }) {
       <TableCell sx={{ width: columnWidths.name }}>{product.name}</TableCell>
       <TableCell sx={{ width: columnWidths.category }}>{product.category}</TableCell>
       <TableCell sx={{ width: columnWidths.bio }}>{product.bio ? "Yes" : "No"}</TableCell>
-      <TableCell sx={{ width: columnWidths.price }}>${formatPrice(product.price)}</TableCell>
+      <TableCell sx={{ width: columnWidths.price }}>
+        ${formatPrice(getFinalPrice(product.price))}
+      </TableCell>
       <TableCell sx={{ width: columnWidths.quantity }}>
         <TextField
           type="number"

@@ -541,6 +541,7 @@ export default function DeliveryDashboard({ user, isAdmin }) {
           updateChecklistField={updateChecklistField}
           handleInvoiceFileChangeAndUpload={handleInvoiceFileChangeAndUpload}
           handleOpenReplaceDialog={handleOpenReplaceDialog}
+          orders={orders} // NEW: pass orders for filtering in distribution
         />
       </Box>
 

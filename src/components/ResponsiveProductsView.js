@@ -2,71 +2,60 @@
 import React from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { List, ListItem, ListItemText, Box, Typography, Button } from '@mui/material';
-// Import your existing VirtualizedProductsTable:
+import { List, ListItem, Typography, Box, Button } from '@mui/material';
 import VirtualizedProductsTable from './VirtualizedProductsTable';
+import { usePricing } from '../contexts/PricingContext';    // <-- NEW
+import { formatPrice } from '../utils/formatPrice';          // <-- NEW
 
-/**
- * A simple card-like list for mobile screens.
- * You can customize how many fields to display, 
- * e.g., category, supplier, etc.
- */
 function MobileProductsList({ products, addToBasket }) {
+  const { getFinalPrice } = usePricing();
+
   return (
     <List>
-      {products.map((product) => (
-        <ListItem 
-          key={product.id} 
-          sx={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            alignItems: 'flex-start',
-            borderBottom: '1px solid #eee'
-          }}
-        >
-          <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
-            {product.name}
-          </Typography>
-          
-          {/* Example: Show Price and maybe Category */}
-          <Typography variant="body2" sx={{ mt: 0.5 }}>
-            Prix: ${product.price?.toFixed(2)}
-          </Typography>
-          {product.category && (
-            <Typography variant="body2" sx={{ color: 'grey.600' }}>
-              Catégorie: {product.category}
+      {products.map((product) => {
+        const finalPrice = getFinalPrice(product.price);
+        const displayPrice = formatPrice(finalPrice);
+
+        return (
+          <ListItem
+            key={product.id}
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'flex-start',
+              borderBottom: '1px solid #eee'
+            }}
+          >
+            <Typography variant="subtitle1" sx={{ fontWeight: 'bold' }}>
+              {product.name}
             </Typography>
-          )}
-          
-          {/* "Add to Basket" button */}
-          <Box sx={{ mt: 1 }}>
-            <Button 
-              variant="contained" 
-              onClick={() => addToBasket(product, 1)}
-            >
-              Ajouter
-            </Button>
-          </Box>
-        </ListItem>
-      ))}
+            <Typography variant="body2" sx={{ mt: 0.5 }}>
+              Prix: ${displayPrice}
+            </Typography>
+            {product.category && (
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                Catégorie: {product.category}
+              </Typography>
+            )}
+            <Box sx={{ mt: 1 }}>
+              <Button variant="contained" onClick={() => addToBasket(product, 1)}>
+                Ajouter
+              </Button>
+            </Box>
+          </ListItem>
+        );
+      })}
     </List>
   );
 }
 
-/**
- * A wrapper that detects if we're on a small screen:
- * - If yes, render the mobile list
- * - If no, render the VirtualizedProductsTable
- */
 export default function ResponsiveProductsView({ products, addToBasket }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
 
   if (isMobile) {
-    // Card/list layout for mobile
     return <MobileProductsList products={products} addToBasket={addToBasket} />;
   } else {
-    // Original table for larger screens
     return <VirtualizedProductsTable products={products} addToBasket={addToBasket} />;
   }
 }
