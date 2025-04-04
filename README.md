@@ -1,70 +1,92 @@
-# Getting Started with Create React App
+# Ecorce.app
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Ecorce.app is a web-based e-commerce and order management system designed for businesses that need to manage product inventory, customer orders, and delivery operations.
 
-## Available Scripts
+## Overview
 
-In the project directory, you can run:
+The platform allows customers to browse products, place orders, and track delivery status, while enabling delivery staff to manage the collection, delivery, and signature confirmation of orders. Admin users can manage product information, pricing, and monitor overall sales.
 
-### `npm start`
+## Key Features
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+- **Product Management**: Browse, filter, and search products by category, bio status, and more
+- **Basket Functionality**: Add products to basket with quantity selection, add comments to items
+- **Order Management**: Place orders, view order history, and track delivery status
+- **Delivery Dashboard**: Manage collection, delivery, and signature confirmation
+- **Price Management**: Centralized pricing system with margins and delivery-specific price overrides
+- **Reporting**: Generate delivery bills and supplier-specific order aggregations
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## Technology Stack
 
-### `npm test`
+- **Frontend**: React, Material-UI, React Context API
+- **Backend**: Firebase (Firestore, Authentication, Cloud Functions, Storage)
+- **State Management**: React Context API
+- **Styling**: Material-UI with responsive design
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Getting Started
 
-### `npm run build`
+### Prerequisites
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- Node.js (v14 or higher)
+- npm or yarn
+- Firebase account and project
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### Installation
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+1. Clone the repository
+   ```
+   git clone https://github.com/onemap-git/ecorce-app.git
+   cd ecorce-app
+   ```
 
-### `npm run eject`
+2. Install dependencies
+   ```
+   npm install
+   ```
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+3. Start the development server
+   ```
+   npm start
+   ```
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+4. Open [http://localhost:3000](http://localhost:3000) to view it in your browser
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## Project Structure
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+- **`/src`**: React application source code
+  - **`/components`**: UI components
+    - `DeliveryDashboard.js`: Main interface for delivery personnel
+    - `ProductsPage.js`: Product listing and basket management
+    - `OrderHistory.js`: Customer order history display
+    - `Basket.js`: Shopping cart component
+  - **`/contexts`**: React contexts
+    - `PricingContext.js`: Centralized pricing management
+  - **`/hooks`**: Custom React hooks
+    - `useDeliveryAggregation.js`: Data fetching and aggregation
+  - **`/utils`**: Utility functions
+    - `pdfUtils.js`: PDF generation utilities
+    - `formatPrice.js`: Price formatting functions
+    - `dateUtils.js`: Date handling utilities
 
-## Learn More
+## Deployment
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+The application is deployed using Firebase Hosting. To deploy:
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+1. Build the application
+   ```
+   npm run build
+   ```
 
-### Code Splitting
+2. Deploy to Firebase
+   ```
+   firebase deploy
+   ```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Contributing
 
-### Analyzing the Bundle Size
+1. Create a new branch for your feature
+2. Make your changes
+3. Submit a pull request
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+## License
 
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+This project is proprietary and confidential.
