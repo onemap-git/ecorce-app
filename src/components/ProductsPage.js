@@ -306,7 +306,7 @@ function ProductsPage({ user, isDelivery }) {
   //  Render
   // ------------------------------------------------------------------
   return (
-    <Container disableGutters sx={{ pt: 4, pb: { xs: 10, lg: 2 }, pr: { xs: 2, lg: '470px' }, maxWidth: 'none', width: '100%' }}>
+    <Container disableGutters sx={{ pt: 4, pb: { xs: 10, lg: 2 }, pr: { xs: 0, lg: '470px' }, pl: 0, ml: 0, maxWidth: 'none', width: '100%' }}>
       {/* Header / Logo / Buttons */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
         <Box>
@@ -363,7 +363,7 @@ function ProductsPage({ user, isDelivery }) {
       />
 
       {/* Product list/table (responsive) */}
-      <Box className="table-container">
+      <Box className="table-container" sx={{ ml: 0, pl: 0, width: '100%' }}>
         <ResponsiveProductsView
           products={sortedFilteredProducts}
           addToBasket={addToBasket}
