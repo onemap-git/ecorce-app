@@ -15,7 +15,8 @@ export default function OrderCard({
   onMarkDelivered,
   onOpenSignaturePad,
   onQuantityChange,
-  onAddProduct
+  onAddProduct,
+  onRefuseItem
 }) {
   const [address, setAddress] = useState(null);
   const [companyName, setCompanyName] = useState('');
@@ -38,9 +39,8 @@ export default function OrderCard({
     fetchPartnerInfo();
   }, [order.email]);
 
-  // 1) Compute total
   const totalCost = (order.items || []).reduce(
-    (acc, item) => acc + item.price * item.quantity,
+    (acc, item) => acc + (item.refused ? 0 : item.price * item.quantity),
     0
   );
 
@@ -107,6 +107,18 @@ export default function OrderCard({
                     pattern: '[0-9]*'
                   }}
                 />
+                
+                {/* Refuse button */}
+                <Button 
+                  variant="outlined" 
+                  color="error"
+                  size="small"
+                  onClick={() => onRefuseItem(order.id, item)}
+                  disabled={item.refused}
+                  sx={{ ml: 1 }}
+                >
+                  {item.refused ? 'Refusé' : 'Refuser'}
+                </Button>
               </Box>
 
               {/* Optional comment */}
