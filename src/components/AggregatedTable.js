@@ -1,5 +1,5 @@
 // src/components/AggregatedTable.js
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   Box,
   Paper,
@@ -74,7 +74,7 @@ function AggregatedTable({
       productIdsSet.add(item.id);
     });
   });
-  const productIds = Array.from(productIdsSet);
+  const productIds = useMemo(() => Array.from(productIdsSet), [aggregatedBySupplier]);
   const originalPrices = useOriginalPrices(productIds);
 
   if (Object.keys(aggregatedBySupplier).length === 0) {
