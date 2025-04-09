@@ -13,7 +13,9 @@ import {
 } from '@mui/material';
 
 export default function ProductEditDialog({ open, product, onClose, onSave }) {
-  const [editedProduct, setEditedProduct] = useState({});
+  const [editedProduct, setEditedProduct] = useState({
+    origin:''
+  });
 
   useEffect(() => {
     if (product) {
@@ -80,6 +82,12 @@ export default function ProductEditDialog({ open, product, onClose, onSave }) {
             value={editedProduct.supplier || ''}
             onChange={(e) => handleChange('supplier', e.target.value)}
           />
+            <TextField
+            label="Origine"
+            variant="outlined"
+            fullWidth
+            value={editedProduct.origin || ''}
+            onChange={(e) => handleChange('origin', e.target.value)}/>
           <FormControlLabel
             control={
               <Checkbox

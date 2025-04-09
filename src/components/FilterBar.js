@@ -35,6 +35,8 @@ function MobileFiltersDialog({
   setBioOnly,
   distinctCategories,
   distinctSuppliers,
+  distinctOrigins,
+  selectedOrigin,
 }) {
   return (
     <Dialog open={open} onClose={onClose} fullWidth>
@@ -80,6 +82,21 @@ function MobileFiltersDialog({
             ))}
           </Select>
         </FormControl>
+        <FormControl sx={{ width: '100%', mt: 2 }}>
+          <InputLabel>Origin</InputLabel>
+          <Select
+            value={selectedOrigin}
+            onChange={(e) => setSelectedOrigin(e.target.value)}
+            label="Origin"
+          >
+            <MenuItem value="">Tous</MenuItem>
+            {distinctOrigins.map((origin) => (
+              <MenuItem key={origin} value={origin}>
+                {origin}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
         <FormControlLabel
           sx={{ mt: 2 }}
@@ -116,6 +133,8 @@ export default function FilterBar({
   setBioOnly,
   distinctCategories,
   distinctSuppliers,
+  distinctOrigins,
+  setSelectedOrigin,
 }) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
@@ -166,6 +185,21 @@ export default function FilterBar({
             ))}
           </Select>
         </FormControl>
+        <FormControl sx={{ minWidth: 160 }}>
+          <InputLabel>Origine</InputLabel>
+          <Select
+            value={selectedOrigin}
+            onChange={(e) => setSelectedOrigin(e.target.value)}
+            label="Origine"
+          >
+            <MenuItem value="">Toutes</MenuItem>
+            {distinctOrigins.map((origin) => (
+              <MenuItem key={origin} value={origin}>
+                {origin}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
         <FormControlLabel
           control={
@@ -204,6 +238,8 @@ export default function FilterBar({
         setBioOnly={setBioOnly}
         distinctCategories={distinctCategories}
         distinctSuppliers={distinctSuppliers}
+        distinctOrigins={distinctOrigins}
+        selectedOrigin={setSelectedOrigin}
       />
     </>
   );

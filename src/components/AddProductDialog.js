@@ -29,7 +29,8 @@ export default function AddProductDialog({ open, onClose, onProductSelect, defau
     name: '',
     code: '',
     price: '',
-    supplier: ''
+    supplier: '',
+    origin:''
   });
   const [loading, setLoading] = useState(false);
 
@@ -37,7 +38,7 @@ export default function AddProductDialog({ open, onClose, onProductSelect, defau
     setMode(defaultMode || 'select');
     setSearchTerm('');
     setNewProduct({ name: '', code: '', price: '', supplier: '' });
-  }, [open, defaultMode]);
+  }, [open, defaultMode]); 
 
   // Fetch available products (for select mode)
   useEffect(() => {
@@ -69,7 +70,8 @@ export default function AddProductDialog({ open, onClose, onProductSelect, defau
         ...newProduct,
         price: parseFloat(newProduct.price) || 0,
         available: true,
-        manuallyAdded: true
+        manuallyAdded: true,
+        origin: newProduct.origin
       };
       const docRef = await addDoc(collection(firestore, 'products'), newProdData);
       const createdProduct = { id: docRef.id, ...newProdData };
@@ -155,6 +157,15 @@ export default function AddProductDialog({ open, onClose, onProductSelect, defau
                 <MenuItem value="canadawide">canadawide</MenuItem>
               </Select>
             </FormControl>
+             <TextField
+              label="Origine"
+              variant="outlined"
+              fullWidth
+              margin="normal"
+              value={newProduct.origin}
+              onChange={(e) => setNewProduct({ ...newProduct, origin: e.target.value })}
+              required
+            />
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
               <Button onClick={() => setMode('select')} color="primary">
                 Retour

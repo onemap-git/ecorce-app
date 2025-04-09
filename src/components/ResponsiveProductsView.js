@@ -58,6 +58,11 @@ function MobileProductsList({ products, addToBasket, basket }) {
                 Catégorie: {product.category}
               </Typography>
             )}
+            {product.origin && (
+              <Typography variant="body2" sx={{ color: 'grey.600' }}>
+                Origine: {product.origin}
+              </Typography>
+            )}
             <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', gap: 2 }}>
               <TextField
                 type="number"

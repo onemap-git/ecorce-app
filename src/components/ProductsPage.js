@@ -40,6 +40,7 @@ function ProductsPage({ user, isDelivery }) {
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [bioOnly, setBioOnly] = useState(false);
+  const [selectedOrigin, setSelectedOrigin] = useState('');
 
   // For auto-saving
   const lastRemoteBasketRef = useRef([]);
@@ -244,15 +245,18 @@ function ProductsPage({ user, isDelivery }) {
   //  Filter logic
   // ------------------------------------------------------------------
   const distinctCategories = Array.from(new Set(products.map(p => p.category))).sort();
-  const distinctSuppliers = Array.from(new Set(products.map(p => p.supplier))).sort();
+    const distinctSuppliers = Array.from(new Set(products.map(p => p.supplier))).sort();
+  const distinctOrigins = Array.from(new Set(products.map(p => p.origin))).sort();
 
   // Filter products based on the states
-  const filteredProducts = products.filter(product => {
+  const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name
       .toLowerCase()
       .includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory
       ? product.category === selectedCategory
+      : true;
+    const matchesOrigin = selectedOrigin ? product.origin === selectedOrigin
       : true;
     const matchesSupplier = selectedSupplier
       ? product.supplier === selectedSupplier
@@ -260,7 +264,7 @@ function ProductsPage({ user, isDelivery }) {
     const matchesBio = bioOnly ? product.bio === true : true;
     return matchesSearch && matchesCategory && matchesSupplier && matchesBio;
   });
-
+  
   // ------------------------------------------------------------------
   //  CUSTOM SORT: FRUITS -> LEGUMES -> everything else
   // ------------------------------------------------------------------
@@ -360,6 +364,8 @@ function ProductsPage({ user, isDelivery }) {
         setBioOnly={setBioOnly}
         distinctCategories={distinctCategories}
         distinctSuppliers={distinctSuppliers}
+        selectedOrigin={selectedOrigin}
+        setSelectedOrigin={setSelectedOrigin}
       />
 
       {/* Product list/table (responsive) */}

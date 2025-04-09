@@ -29,6 +29,7 @@ function ProductRow({ product, addToBasket, style, columnWidths, basket }) {
     >
       <TableCell sx={{ width: columnWidths.name }}>{product.name}</TableCell>
       <TableCell sx={{ width: columnWidths.category }}>{product.category}</TableCell>
+      <TableCell sx={{ width: columnWidths.origin }}>{product.origin}</TableCell>
       <TableCell sx={{ width: columnWidths.bio }}>{product.bio ? "Yes" : "No"}</TableCell>
       <TableCell sx={{ width: columnWidths.price }}>
         ${formatPrice(getFinalPrice(product.price))}

@@ -9,8 +9,9 @@ import { formatPrice } from '../utils/formatPrice';          // <-- NEW
 const columns = [
   { label: 'Bio', baseWidth: 40 },
   { label: 'Produit', baseWidth: 300 },
-  { label: 'Catégorie', baseWidth: 150 },
-  { label: 'Fournisseur', baseWidth: 120 },
+  { label: 'Catégorie', baseWidth: 120 },
+  { label: 'Origine', baseWidth: 100 },
+  { label: 'Fournisseur', baseWidth: 100 },
   { label: 'Prix', baseWidth: 80 },
   { label: 'Quantité', baseWidth: 60 },
   { label: 'Ajouter', baseWidth: 60 },
@@ -88,7 +89,18 @@ function RowRendererWithoutHeader({ index, style, data }) {
         {product.category}
       </div>
 
-      {/* Column 4: Supplier */}
+      {/* Column 4: origin */}
+      <div
+        style={{
+          width: scaledColumns[3].scaledWidth,
+          padding: '8px',
+          boxSizing: 'border-box',
+        }}
+      >
+        {product.origin || ''}
+      </div>
+
+      {/* Column 5: Supplier */}
       <div
         style={{
           width: scaledColumns[3].scaledWidth,
@@ -99,9 +111,9 @@ function RowRendererWithoutHeader({ index, style, data }) {
         {product.supplier || ''}
       </div>
 
-      {/* Column 5: Price (with margin) */}
+      {/* Column 6: Price (with margin) */}
       <div
-        style={{
+         style={{
           width: scaledColumns[4].scaledWidth,
           padding: '8px',
           boxSizing: 'border-box',
@@ -111,9 +123,9 @@ function RowRendererWithoutHeader({ index, style, data }) {
         ${displayPrice}
       </div>
 
-      {/* Column 6: Quantity input */}
+      {/* Column 7: Quantity input */}
       <div
-        style={{
+         style={{
           width: scaledColumns[5].scaledWidth,
           padding: '8px',
           boxSizing: 'border-box',
@@ -128,7 +140,7 @@ function RowRendererWithoutHeader({ index, style, data }) {
         />
       </div>
 
-      {/* Column 7: Add button */}
+      {/* Column 8: Add button */}
       <div
         style={{
           width: scaledColumns[6].scaledWidth,
