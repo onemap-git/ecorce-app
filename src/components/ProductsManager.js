@@ -6,6 +6,7 @@ import { Container, Typography, Box, List, ListItem, ListItemText, Divider, Butt
 import FilterBar from './FilterBar';
 import ProductEditDialog from './ProductEditDialog';
 import AddProductDialog from './AddProductDialog';
+import CanadawideUploadDialog from './CanadawideUploadDialog';
 
 export default function ProductsManager({ user }) {
   const [products, setProducts] = useState([]);
@@ -16,6 +17,7 @@ export default function ProductsManager({ user }) {
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [refreshToggle, setRefreshToggle] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [canadawideUploadOpen, setCanadawideUploadOpen] = useState(false);
 
   // Fetch all products (admins see everything)
   useEffect(() => {
@@ -68,10 +70,13 @@ export default function ProductsManager({ user }) {
       <Typography variant="h4" gutterBottom>
         Gestionnaire de produits
       </Typography>
-      {/* Add New Product button */}
-      <Box sx={{ mb: 2 }}>
+      {/* Add New Product and Upload Canadawide buttons */}
+      <Box sx={{ mb: 2, display: 'flex', gap: 2 }}>
         <Button variant="contained" color="primary" onClick={() => setAddDialogOpen(true)}>
             Ajouter un nouveau produit
+        </Button>
+        <Button variant="contained" color="secondary" onClick={() => setCanadawideUploadOpen(true)}>
+            Upload canadawide
         </Button>
       </Box>
       <FilterBar
@@ -122,6 +127,10 @@ export default function ProductsManager({ user }) {
           defaultMode="manual"
         />
       )}
+      <CanadawideUploadDialog
+        open={canadawideUploadOpen}
+        onClose={() => setCanadawideUploadOpen(false)}
+      />
     </Container>
   );
 }

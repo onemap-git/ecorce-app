@@ -5,6 +5,11 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 const db = admin.firestore();
 
+const { processCanadawideExcel, checkProcessingStatus } = require('./src/processCanadawideExcel');
+
+exports.processCanadawideExcel = processCanadawideExcel;
+exports.checkProcessingStatus = checkProcessingStatus;
+
 /**
  * Helper function to fetch the margin from Firestore.
  * Returns 0 if no margin is set.
