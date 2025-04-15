@@ -21,6 +21,7 @@ const PROCESSING_COLLECTION = 'canadawide_processing';
  * This function quickly returns and starts a background process
  */
 exports.processCanadawideExcel = functions.https.onRequest(async (req, res) => {
+  console.log('processCanadawideExcel function called');
   res.set('Access-Control-Allow-Origin', '*');
   res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS, POST');
   res.set('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
@@ -67,10 +68,25 @@ exports.processCanadawideExcel = functions.https.onRequest(async (req, res) => {
  * This function can run for up to 9 minutes (540 seconds)
  */
 exports.processExcelBackground = onDocumentCreated(
-  `${PROCESSING_COLLECTION}/{processingId}`,
+  {
+    document: `${PROCESSING_COLLECTION}/{processingId}`,
+    region: 'us-central1',
+    memory: '1GiB',
+    timeoutSeconds: 540
+  },
   async (event) => {
+    console.log('Background function triggered with event:', JSON.stringify(event));
+    
+    if (!event.data) {
+      console.error('No data in event');
+      return;
+    }
+    
     const snapshot = event.data;
     const context = event.params;
+    
+    console.log('Processing document with ID:', context.processingId);
+    
     const processingData = snapshot.data();
     const processingId = context.processingId;
     const statusRef = snapshot.ref;
