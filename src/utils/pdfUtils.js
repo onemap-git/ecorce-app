@@ -82,3 +82,89 @@ export function exportAggregatedPDF(aggregatedItemsArray, currentWeek, supplierL
   // 8) Save the PDF
   doc.save(`aggregated_products_week_${currentWeek}${supplierLabel ? `_${supplierLabel}` : ''}.pdf`);
 }
+
+/**
+ * Generates and saves a delivery bill PDF for an order
+ * @param {Object} order - The order object
+ * @param {String} companyName - The company name
+ * @param {String} address - The delivery address
+ */
+export function exportDeliveryBillPDF(order, companyName, address) {
+  const doc = new jsPDF();
+
+  // Insert the logo at top-left corner
+  doc.addImage(logo, 'PNG', 10, 10, 30, 0);
+
+  doc.setLineWidth(0.5);
+  doc.line(10, 25, 200, 25);
+
+  let startY = 35;
+  doc.setFontSize(16);
+  doc.text('Delivery Bill', 14, startY);
+  startY += 10;
+
+  doc.setFontSize(12);
+  doc.text(`Order ID: ${order.id}`, 14, startY);
+  startY += 8;
+
+  const deliveredOn = order.deliveredAt
+    ? order.deliveredAt.toDate().toLocaleString()
+    : 'N/A';
+  doc.text(`Delivered on: ${deliveredOn}`, 14, startY);
+  startY += 10;
+
+  if (companyName) {
+    doc.text(`Company: ${companyName}`, 14, startY);
+    startY += 8;
+  }
+
+  doc.text(`Email: ${order.email}`, 14, startY);
+  startY += 8;
+
+  if (address) {
+    doc.text(`Address: ${address}`, 14, startY);
+    startY += 10;
+  }
+
+  const tableColumns = ['ID', 'Name', 'Quantity', 'Price'];
+  const tableRows = (order.items || []).map(item => [
+    item.id,
+    item.name,
+    item.quantity.toString(),
+    `$${parseFloat(item.price).toFixed(2)}`
+  ]);
+
+  // Calculate total cost
+  const totalCost = (order.items || []).reduce(
+    (acc, item) => acc + item.price * item.quantity,
+    0
+  );
+
+  autoTable(doc, {
+    startY,
+    head: [tableColumns],
+    body: tableRows,
+    styles: { fontSize: 10 },
+    headStyles: { fillColor: [41, 128, 185] },
+    columnStyles: {
+      2: { halign: 'right' },
+      3: { halign: 'right' }
+    }
+  });
+
+  let finalY = doc.lastAutoTable.finalY || startY;
+  if (order.signature) {
+    doc.text('Signature:', 14, finalY + 15);
+    doc.addImage(order.signature, 'PNG', 14, finalY + 20, 60, 30);
+    finalY += 45;
+  } else {
+    finalY = finalY + 10;
+  }
+
+  doc.setFontSize(12);
+  doc.setFont('', 'bold');
+  doc.text(`Total: $${totalCost.toFixed(2)}`, 14, finalY + 10);
+
+  // Save the PDF
+  doc.save(`delivery_bill_order_${order.id}.pdf`);
+}
