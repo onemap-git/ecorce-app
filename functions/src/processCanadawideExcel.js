@@ -17,17 +17,33 @@ const storage = new Storage();
  * Cloud Function to process Canadawide Excel file
  * Triggered by a file upload to the temp/canadawide/ directory in Firebase Storage
  */
-exports.processCanadawideExcel = functions.storage.object().onFinalize(async (object) => {
-  if (!object.name.startsWith('temp/canadawide/') || 
-      (!object.name.endsWith('.xlsx') && !object.name.endsWith('.xls'))) {
-    console.log('Not a Canadawide Excel file:', object.name);
-    return null;
+exports.processCanadawideExcel = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'The function must be called while authenticated.'
+    );
   }
   
-  const fileBucket = object.bucket;
-  const filePath = object.name;
-  const fileName = path.basename(filePath);
+  const fileUrl = data.fileUrl;
+  if (!fileUrl) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'The function must be called with a fileUrl.'
+    );
+  }
   
+  const urlParts = fileUrl.split('/');
+  const fileName = urlParts[urlParts.length - 1].split('?')[0];
+  const filePath = `temp/canadawide/${fileName}`;
+  const fileBucket = process.env.GCLOUD_PROJECT + '.appspot.com';
+  
+  if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
+    throw new functions.https.HttpsError(
+      'invalid-argument',
+      'The file must be an Excel file (.xlsx or .xls).'
+    );
+  }
   const tempFilePath = path.join(os.tmpdir(), fileName);
   
   try {
