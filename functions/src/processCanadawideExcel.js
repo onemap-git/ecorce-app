@@ -19,8 +19,9 @@ const storage = new Storage();
  */
 exports.processCanadawideExcel = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'POST');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS, POST');
+  res.set('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
   
   if (req.method === 'OPTIONS') {
     res.status(204).send('');
@@ -171,8 +172,9 @@ exports.processCanadawideExcel = functions.https.onRequest(async (req, res) => {
  */
 exports.checkProcessingStatus = functions.https.onRequest(async (req, res) => {
   res.set('Access-Control-Allow-Origin', '*');
-  res.set('Access-Control-Allow-Methods', 'GET, POST');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS, POST');
+  res.set('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.set('Access-Control-Max-Age', '3600');
   
   if (req.method === 'OPTIONS') {
     res.status(204).send('');
