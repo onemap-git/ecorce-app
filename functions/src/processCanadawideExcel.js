@@ -38,10 +38,22 @@ exports.processCanadawideExcel = functions.https.onRequest(async (req, res) => {
     );
   }
   
-  const urlParts = fileUrl.split('/');
-  const fileName = urlParts[urlParts.length - 1].split('?')[0];
-  const filePath = `temp/canadawide/${fileName}`;
-  const fileBucket = process.env.GCLOUD_PROJECT + '.appspot.com';
+  const fileUrlObj = new URL(fileUrl);
+  const pathMatch = fileUrlObj.pathname.match(/\/o\/(.+)$/);
+  
+  if (!pathMatch) {
+    throw new Error('Invalid file URL format');
+  }
+  
+  const encodedFilePath = pathMatch[1];
+  const filePath = decodeURIComponent(encodedFilePath);
+  const fileName = filePath.split('/').pop();
+  
+  const bucketMatch = fileUrlObj.pathname.match(/\/b\/([^\/]+)/);
+  if (!bucketMatch) {
+    throw new Error('Could not extract bucket name from URL');
+  }
+  const fileBucket = bucketMatch[1];
   
   if (!fileName.endsWith('.xlsx') && !fileName.endsWith('.xls')) {
     throw new functions.https.HttpsError(
