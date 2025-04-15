@@ -5,6 +5,7 @@ import { doc, getDoc } from 'firebase/firestore';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './components/Login';
 import ProductsPage from './components/ProductsPage';
+import TailwindProductsPage from './components/TailwindProductsPage';
 import OrderHistory from './components/OrderHistory';
 import DeliveryDashboard from './components/DeliveryDashboard';
 import ProductsManager from './components/ProductsManager'; // NEW: Products Manager for admins
@@ -54,6 +55,11 @@ function App() {
         <Route
           path="/"
           element={user ? <ProductsPage user={user} isDelivery={isDelivery} /> : <Navigate to="/login" />}
+        />
+        {/* Tailwind version of the products page */}
+        <Route
+          path="/tailwind"
+          element={user ? <TailwindProductsPage user={user} isDelivery={isDelivery} /> : <Navigate to="/login" />}
         />
         <Route path="/orders" element={user ? <OrderHistory user={user} /> : <Navigate to="/login" />} />
         {/* Delivery route */}
