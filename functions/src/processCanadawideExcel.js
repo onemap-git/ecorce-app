@@ -18,12 +18,6 @@ const storage = new Storage();
  * Triggered by a file upload to the temp/canadawide/ directory in Firebase Storage
  */
 exports.processCanadawideExcel = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      'unauthenticated',
-      'The function must be called while authenticated.'
-    );
-  }
   
   const fileUrl = data.fileUrl;
   if (!fileUrl) {
@@ -163,12 +157,6 @@ exports.processCanadawideExcel = functions.https.onCall(async (data, context) =>
  * HTTP function to check the status of a file processing operation
  */
 exports.checkProcessingStatus = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError(
-      'unauthenticated',
-      'The function must be called while authenticated.'
-    );
-  }
   
   try {
     return { status: 'completed', success: true };
