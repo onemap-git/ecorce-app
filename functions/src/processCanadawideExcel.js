@@ -17,7 +17,17 @@ const storage = new Storage();
  * Cloud Function to process Canadawide Excel file
  * Triggered by a file upload to the temp/canadawide/ directory in Firebase Storage
  */
-exports.processCanadawideExcel = functions.https.onCall(async (data, context) => {
+exports.processCanadawideExcel = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
+  
+  const data = req.body || {};
   
   const fileUrl = data.fileUrl;
   if (!fileUrl) {
@@ -149,19 +159,30 @@ exports.processCanadawideExcel = functions.https.onCall(async (data, context) =>
       fs.unlinkSync(tempFilePath);
     }
     
-    throw error;
+    res.status(500).json({ error: error.message });
+    return;
   }
+  
+  res.status(200).json({ success: true, productsProcessed: products.length });
 });
 
 /**
  * HTTP function to check the status of a file processing operation
  */
-exports.checkProcessingStatus = functions.https.onCall(async (data, context) => {
+exports.checkProcessingStatus = functions.https.onRequest(async (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  if (req.method === 'OPTIONS') {
+    res.status(204).send('');
+    return;
+  }
   
   try {
-    return { status: 'completed', success: true };
+    res.status(200).json({ status: 'completed', success: true });
   } catch (error) {
     console.error('Error checking processing status:', error);
-    throw new functions.https.HttpsError('internal', error.message);
+    res.status(500).json({ error: error.message });
   }
 });

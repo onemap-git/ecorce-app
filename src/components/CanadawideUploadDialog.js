@@ -12,7 +12,7 @@ import {
 } from '@mui/material';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage, auth } from '../firebase';
-import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
+import { getFunctions } from 'firebase/functions';
 
 export default function CanadawideUploadDialog({ open, onClose }) {
   const [file, setFile] = useState(null);
@@ -24,7 +24,7 @@ export default function CanadawideUploadDialog({ open, onClose }) {
   const region = 'us-central1';
   const functions = getFunctions(undefined, region);
   
-  const checkProcessingStatus = httpsCallable(functions, 'checkProcessingStatus');
+  const functionBaseUrl = `https://${region}-${process.env.REACT_APP_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
   
   useEffect(() => {
     return () => {
@@ -91,8 +91,18 @@ export default function CanadawideUploadDialog({ open, onClose }) {
           const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
           
           try {
-            const processCanadawide = httpsCallable(functions, 'processCanadawideExcel');
-            await processCanadawide({ fileUrl: downloadURL });
+            const processUrl = `${functionBaseUrl}/processCanadawideExcel`;
+            const response = await fetch(processUrl, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ fileUrl: downloadURL }),
+            });
+            
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
             
             setStatus({ 
               type: 'success', 
@@ -101,12 +111,25 @@ export default function CanadawideUploadDialog({ open, onClose }) {
             
             statusCheckIntervalRef.current = setInterval(async () => {
               try {
-                const result = await checkProcessingStatus();
-                if (result.data.status === 'completed') {
+                const checkUrl = `${functionBaseUrl}/checkProcessingStatus`;
+                const statusResponse = await fetch(checkUrl, {
+                  method: 'GET',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                });
+                
+                if (!statusResponse.ok) {
+                  throw new Error(`HTTP error! Status: ${statusResponse.status}`);
+                }
+                
+                const result = await statusResponse.json();
+                
+                if (result.status === 'completed') {
                   clearInterval(statusCheckIntervalRef.current);
                   statusCheckIntervalRef.current = null;
                   
-                  if (result.data.success) {
+                  if (result.success) {
                     setStatus({ 
                       type: 'success', 
                       message: 'Produits mis à jour avec succès!' 
