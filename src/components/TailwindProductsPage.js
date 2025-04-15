@@ -15,9 +15,9 @@ import { Link } from 'react-router-dom';
 import Logo from '../logo.svg';
 import { signOut } from 'firebase/auth';
 import { auth } from '../firebase';
-import FilterBar from './FilterBar';
-import ResponsiveProductsView from './ResponsiveProductsView';
-import Basket from './Basket';
+import TailwindFilterBar from './TailwindFilterBar';
+import TailwindResponsiveProductsView from './TailwindResponsiveProductsView';
+import TailwindBasket from './TailwindBasket';
 import { getWeekCode, getHumanReadableWeek } from '../utils/dateUtils';
 
 function TailwindProductsPage({ user, isDelivery }) {
@@ -293,8 +293,8 @@ function TailwindProductsPage({ user, isDelivery }) {
         </div>
       </div>
 
-      {/* Filter Bar (with mobile dialog) - still using Material-UI component */}
-      <FilterBar
+      {/* Filter Bar (with mobile dialog) - using Tailwind component */}
+      <TailwindFilterBar
         searchTerm={searchTerm}
         setSearchTerm={setSearchTerm}
         selectedCategory={selectedCategory}
@@ -307,17 +307,17 @@ function TailwindProductsPage({ user, isDelivery }) {
         distinctSuppliers={distinctSuppliers}
       />
 
-      {/* Product list/table (responsive) - still using Material-UI component */}
+      {/* Product list/table (responsive) - using Tailwind component */}
       <div className="table-container ml-0 pl-0 w-full">
-        <ResponsiveProductsView
+        <TailwindResponsiveProductsView
           products={sortedFilteredProducts}
           addToBasket={addToBasket}
           basket={basket}
         />
       </div>
 
-      {/* Basket (at bottom) - still using Material-UI component */}
-      <Basket
+      {/* Basket (at bottom) - using Tailwind component */}
+      <TailwindBasket
         basket={basket}
         updateBasketItem={updateBasketItem}
         updateBasketItemComment={updateBasketItemComment}
