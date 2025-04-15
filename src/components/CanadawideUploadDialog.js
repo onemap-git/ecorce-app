@@ -22,9 +22,11 @@ export default function CanadawideUploadDialog({ open, onClose }) {
   const fileInputRef = useRef(null);
   const statusCheckIntervalRef = useRef(null);
   const region = 'us-central1';
-  const functions = getFunctions(undefined, region);
+  const app = auth.app;
+  const functions = getFunctions(app, region);
   
-  const functionBaseUrl = `https://${region}-${process.env.REACT_APP_FIREBASE_PROJECT_ID}.cloudfunctions.net`;
+  const projectId = app.options.projectId;
+  const functionBaseUrl = `https://${region}-${projectId}.cloudfunctions.net`;
   
   useEffect(() => {
     return () => {
