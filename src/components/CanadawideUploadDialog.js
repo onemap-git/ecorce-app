@@ -106,6 +106,13 @@ export default function CanadawideUploadDialog({ open, onClose }) {
               throw new Error(`HTTP error! Status: ${response.status}`);
             }
             
+            const result = await response.json();
+            const processingId = result.processingId;
+            
+            if (!processingId) {
+              throw new Error('No processing ID returned from server');
+            }
+            
             setStatus({ 
               type: 'success', 
               message: 'Fichier téléversé avec succès! Traitement en cours...' 
@@ -113,7 +120,7 @@ export default function CanadawideUploadDialog({ open, onClose }) {
             
             statusCheckIntervalRef.current = setInterval(async () => {
               try {
-                const checkUrl = `${functionBaseUrl}/checkProcessingStatus`;
+                const checkUrl = `${functionBaseUrl}/checkProcessingStatus?processingId=${processingId}`;
                 const statusResponse = await fetch(checkUrl, {
                   method: 'GET',
                   headers: {
@@ -125,16 +132,31 @@ export default function CanadawideUploadDialog({ open, onClose }) {
                   throw new Error(`HTTP error! Status: ${statusResponse.status}`);
                 }
                 
-                const result = await statusResponse.json();
+                const statusResult = await statusResponse.json();
                 
-                if (result.status === 'completed') {
+                if (statusResult.status === 'downloading') {
+                  setStatus({
+                    type: 'info',
+                    message: 'Téléchargement du fichier en cours...'
+                  });
+                } else if (statusResult.status === 'processing') {
+                  setStatus({
+                    type: 'info',
+                    message: 'Traitement du fichier Excel en cours...'
+                  });
+                } else if (statusResult.status === 'updating_database') {
+                  setStatus({
+                    type: 'info',
+                    message: `Mise à jour de la base de données (${statusResult.productsFound || 0} produits trouvés)...`
+                  });
+                } else if (statusResult.status === 'completed') {
                   clearInterval(statusCheckIntervalRef.current);
                   statusCheckIntervalRef.current = null;
                   
-                  if (result.success) {
+                  if (statusResult.success) {
                     setStatus({ 
                       type: 'success', 
-                      message: 'Produits mis à jour avec succès!' 
+                      message: `Produits mis à jour avec succès! (${statusResult.productsProcessed || 0} produits traités)` 
                     });
                   } else {
                     setStatus({ 
@@ -142,6 +164,14 @@ export default function CanadawideUploadDialog({ open, onClose }) {
                       message: 'Erreur lors du traitement du fichier. Veuillez réessayer.' 
                     });
                   }
+                  setUploading(false);
+                } else if (statusResult.status === 'error') {
+                  clearInterval(statusCheckIntervalRef.current);
+                  statusCheckIntervalRef.current = null;
+                  setStatus({ 
+                    type: 'error', 
+                    message: `Erreur: ${statusResult.error || 'Erreur inconnue'}` 
+                  });
                   setUploading(false);
                 }
               } catch (error) {
