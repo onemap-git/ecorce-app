@@ -21,7 +21,8 @@ export default function CanadawideUploadDialog({ open, onClose }) {
   const [status, setStatus] = useState({ type: '', message: '' });
   const fileInputRef = useRef(null);
   const statusCheckIntervalRef = useRef(null);
-  const functions = getFunctions();
+  const region = 'us-central1';
+  const functions = getFunctions(undefined, region);
   
   const checkProcessingStatus = httpsCallable(functions, 'checkProcessingStatus');
   
