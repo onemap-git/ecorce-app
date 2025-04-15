@@ -11,8 +11,8 @@ import {
   Alert
 } from '@mui/material';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { storage, auth } from '../firebase';
+import { getFunctions, httpsCallable, connectFunctionsEmulator } from 'firebase/functions';
 
 export default function CanadawideUploadDialog({ open, onClose }) {
   const [file, setFile] = useState(null);
@@ -53,6 +53,14 @@ export default function CanadawideUploadDialog({ open, onClose }) {
   const handleUpload = async () => {
     if (!file) {
       setStatus({ type: 'error', message: 'Veuillez sélectionner un fichier' });
+      return;
+    }
+    
+    if (!auth.currentUser) {
+      setStatus({ 
+        type: 'error', 
+        message: 'Vous devez être connecté pour téléverser des fichiers.' 
+      });
       return;
     }
 
