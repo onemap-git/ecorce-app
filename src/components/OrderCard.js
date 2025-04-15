@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 import { firestore } from '../firebase';
+import { exportDeliveryBillPDF } from '../utils/pdfUtils';
 import {
   Paper,
   Typography,
@@ -43,6 +44,10 @@ export default function OrderCard({
     (acc, item) => acc + (item.refused ? 0 : item.price * item.quantity),
     0
   );
+
+  const printBill = () => {
+    exportDeliveryBillPDF(order, companyName, address);
+  };
 
   return (
     <Paper sx={{ mb: 2, p: 2 }}>
@@ -146,6 +151,10 @@ export default function OrderCard({
           disabled={!order.signature}
         >
           Mark Delivered
+        </Button>
+
+        <Button variant="contained" onClick={printBill}>
+          Imprimer le bon de livraison
         </Button>
 
         <Button variant="contained" onClick={() => onAddProduct(order.id)}>
