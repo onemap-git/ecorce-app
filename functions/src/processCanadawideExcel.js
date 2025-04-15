@@ -1,4 +1,5 @@
 const functions = require('firebase-functions');
+const { onDocumentCreated } = require('firebase-functions/v2/firestore');
 const admin = require('firebase-admin');
 const os = require('os');
 const path = require('path');
@@ -65,11 +66,13 @@ exports.processCanadawideExcel = functions.https.onRequest(async (req, res) => {
  * Background function triggered when a new processing document is created
  * This function can run for up to 9 minutes (540 seconds)
  */
-exports.processExcelBackground = functions.firestore
-  .document(`${PROCESSING_COLLECTION}/{processingId}`)
-  .onCreate(async (snapshot, context) => {
+exports.processExcelBackground = onDocumentCreated(
+  `${PROCESSING_COLLECTION}/{processingId}`,
+  async (event) => {
+    const snapshot = event.data;
+    const context = event.params;
     const processingData = snapshot.data();
-    const processingId = context.params.processingId;
+    const processingId = context.processingId;
     const statusRef = snapshot.ref;
     
     let tempFilePath = null;
